@@ -1,0 +1,14 @@
+# dependencies and builds
+node_modules/
+frontend/dist/
+backend/bin/
+*.log
+
+# local configuration
+.env
+deploy/.env
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
