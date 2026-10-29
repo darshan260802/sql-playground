@@ -86,8 +86,9 @@ function SchemaBrowser({ target, schema, error, onInsert, onPreview }: { target:
         <Search />
         <input className="input input-sm" placeholder="Search tables and columns" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search schema" />
       </div>
-      <div className="schema-db">
+      <div className="schema-db" title="Every table below is in this one database">
         <span className={`db-dot ${target === 'mine' ? 'mine' : ''}`} />
+        <span className="muted">database</span>
         <span className="mono">{schema?.schema ?? '…'}</span>
         <span className="muted">{target === 'mine' ? 'your copy' : 'read-only'}</span>
       </div>
@@ -101,7 +102,7 @@ function SchemaBrowser({ target, schema, error, onInsert, onPreview }: { target:
       )}
       {groups.map((g) => (
         <div key={g.domain} className="schema-group">
-          <div className="eyebrow schema-domain">{g.domain}</div>
+          <div className="eyebrow schema-domain">{g.domain} tables</div>
           {g.tables.map((t) => {
             const isOpen = open[t.name] || (query.length > 1 && !t.name.includes(query))
             return (

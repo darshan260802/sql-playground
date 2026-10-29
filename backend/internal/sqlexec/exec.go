@@ -59,8 +59,8 @@ type Options struct {
 	// Monitor is polled every second while a statement runs; returning a
 	// reason kills the statement (used to enforce the storage quota).
 	Monitor func(stmt Statement) string
-	// Hints adds context-specific hints to errors (e.g. "sign in to write").
-	Hints func(e *SQLError)
+	// Hints adds context-specific hints to a statement's error (e.g. "sign in to write").
+	Hints func(e *SQLError, stmt Statement)
 	// StopOnError stops at the first failing statement.
 	StopOnError bool
 }
@@ -127,7 +127,7 @@ func Run(ctx context.Context, c Conn, connID int64, stmts []Statement, opt Optio
 				}
 				addHint(r.Error)
 				if opt.Hints != nil {
-					opt.Hints(r.Error)
+					opt.Hints(r.Error, st)
 				}
 			}
 		}

@@ -534,7 +534,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted-soft); pointer-events: none; }
 .search-box .input { padding-left: 31px; background: var(--canvas); }
 .schema-db { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; font-size: 12px; color: var(--body); }
-.schema-db .muted { margin-left: auto; }
+.schema-db .muted:last-child { margin-left: auto; }
 .db-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-soft); }
 .db-dot.mine { background: var(--success); box-shadow: 0 0 0 3px var(--success-wash); }
 .muted { color: var(--muted); }

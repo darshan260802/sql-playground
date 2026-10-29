@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -408,9 +409,15 @@ func (s *Server) quotaMonitor(userID int) func(sqlexec.Statement) string {
 	}
 }
 
-func (s *Server) hinter(u *store.User, target string) func(*sqlexec.SQLError) {
-	return func(e *sqlexec.SQLError) {
+func (s *Server) hinter(u *store.User, target string) func(*sqlexec.SQLError, sqlexec.Statement) {
+	return func(e *sqlexec.SQLError, stmt sqlexec.Statement) {
 		if !sqlexec.IsPermissionError(e) {
+			return
+		}
+		db, table := deniedDatabase(e, stmt.SQL)
+		if db != "" && !s.usableDatabase(u, db) {
+			e.Reason = "unknown_database"
+			e.Hint = s.databaseHint(u, db, table)
 			return
 		}
 		switch {
@@ -420,10 +427,64 @@ func (s *Server) hinter(u *store.User, target string) func(*sqlexec.SQLError) {
 		case target == "core":
 			e.Reason = "read_only_core"
 			e.Hint = "The original data is read-only. Switch the target to “My database” to make changes."
+		case strings.EqualFold(db, s.cfg.CoreSchema):
+			e.Hint = fmt.Sprintf("%[1]s is the original data, which is read-only. Leave out “%[1]s.” to change your own copy.", db)
 		default:
 			e.Hint = "You can only change objects inside your own database."
 		}
 	}
+}
+
+var (
+	deniedTableRe = regexp.MustCompile(`(?i)command denied to user .* for table '([^']+)'`)
+	deniedDBRe    = regexp.MustCompile(`(?i)access denied for user .* to database '([^']+)'`)
+)
+
+// deniedDatabase finds the database a permission error is about: named in the
+// message (1044), or written in front of the denied table in the SQL (1142,
+// whose message names only the table).
+func deniedDatabase(e *sqlexec.SQLError, sql string) (db, table string) {
+	if m := deniedDBRe.FindStringSubmatch(e.Message); m != nil {
+		return m[1], ""
+	}
+	m := deniedTableRe.FindStringSubmatch(e.Message)
+	if m == nil {
+		return "", ""
+	}
+	table = m[1]
+	if i := strings.LastIndexByte(table, '.'); i >= 0 {
+		return table[:i], table[i+1:]
+	}
+	q := regexp.MustCompile("(?i)`?([A-Za-z0-9_$]+)`?\\s*\\.\\s*`?" + regexp.QuoteMeta(table) + "(?:`|\\b)")
+	if m := q.FindStringSubmatch(sql); m != nil {
+		return m[1], table
+	}
+	return "", table
+}
+
+// usableDatabase reports whether db is one this visitor can read at all.
+func (s *Server) usableDatabase(u *store.User, db string) bool {
+	switch {
+	case strings.EqualFold(db, s.cfg.CoreSchema), strings.EqualFold(db, "information_schema"):
+		return true
+	case u != nil && strings.EqualFold(db, s.prov.Schema(u.ID)):
+		return true
+	}
+	return false
+}
+
+// databaseHint explains that the domains in the schema browser (E-commerce,
+// HR, Finance) are groups of tables in one database, not databases.
+func (s *Server) databaseHint(u *store.User, db, table string) string {
+	if table == "" {
+		return fmt.Sprintf("There's no database called “%s” here. E-commerce, HR and Finance are groups of tables inside one database, which is already selected, so write table names on their own, e.g. SELECT * FROM jobs.", db)
+	}
+	core := s.cfg.CoreSchema
+	names := fmt.Sprintf("%s.%s (original data)", core, table)
+	if u != nil {
+		names = fmt.Sprintf("%s.%s (your copy) or %s", s.prov.Schema(u.ID), table, names)
+	}
+	return fmt.Sprintf("There's no database called “%s” here. E-commerce, HR and Finance are groups of tables inside one database, so write just %s, or include the database name: %s.", db, table, names)
 }
 
 func (s *Server) quotaBytes() int64 { return int64(s.cfg.UserQuotaMB) << 20 }

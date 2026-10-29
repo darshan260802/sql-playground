@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/darshan260802/sql-playground/backend/internal/lessons"
+	"github.com/darshan260802/sql-playground/backend/internal/sqlexec"
 	"github.com/darshan260802/sql-playground/backend/internal/store"
 )
 
@@ -191,7 +192,7 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out.Error != nil {
-		s.hinter(u, map[bool]string{true: "mine", false: "core"}[ex.RequiresLogin()])(out.Error)
+		s.hinter(u, map[bool]string{true: "mine", false: "core"}[ex.RequiresLogin()])(out.Error, sqlexec.Statement{SQL: req.SQL})
 	}
 	if u != nil {
 		if err := s.store.RecordAttempt(r.Context(), u.ID, ex.ID, req.SQL, out.Correct); err != nil {
