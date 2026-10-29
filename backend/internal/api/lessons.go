@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/darshan260802/sql-playground/backend/internal/lessons"
 	"github.com/darshan260802/sql-playground/backend/internal/store"
@@ -227,4 +228,24 @@ func (s *Server) handleImportProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"imported": len(valid)})
+}
+
+// WarmLessons computes every query exercise's expected result in the
+// background, so the first visitor to a lesson doesn't wait for it.
+func (s *Server) WarmLessons(ctx context.Context) {
+	start := time.Now()
+	n := 0
+	for _, l := range s.lessons.Lessons {
+		for _, ex := range l.Exercises {
+			if ex.Kind != "select" {
+				continue
+			}
+			if _, err := s.checker.Expected(ctx, ex, s.readerOpener()); err != nil {
+				log.Printf("warm %s: %v", ex.ID, err)
+				continue
+			}
+			n++
+		}
+	}
+	log.Printf("prepared %d expected results in %s", n, time.Since(start).Round(time.Millisecond))
 }

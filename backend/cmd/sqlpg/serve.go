@@ -58,6 +58,7 @@ func serve(ctx context.Context, cfg config.Config) {
 		}
 	}
 	log.Printf("%d accounts, %d lessons, %d exercises", len(users), len(cat.Lessons), cat.ExerciseCount())
+	go srv.WarmLessons(context.Background())
 
 	go func() {
 		for range time.Tick(time.Hour) {

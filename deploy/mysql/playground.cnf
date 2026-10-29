@@ -1,0 +1,24 @@
+[mysqld]
+# --- sized for an 8 GB VPS that also runs other projects
+innodb_buffer_pool_size = 2G
+innodb_redo_log_capacity = 512M
+max_connections = 200
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+# --- no binary log: there is no replication, and every database reset copies
+#     ~150 MB, which would otherwise pile up as binlogs on disk
+disable_log_bin
+
+# --- safety: learners can't read or write server files
+local_infile = OFF
+secure_file_priv = NULL
+
+# --- behaviour the app relies on
+innodb_file_per_table = ON
+information_schema_stats_expiry = 0
+performance_schema = ON
+skip_name_resolve = ON
+character_set_server = utf8mb4
+collation_server = utf8mb4_0900_ai_ci
+default_time_zone = '+00:00'
