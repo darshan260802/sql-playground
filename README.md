@@ -143,6 +143,7 @@ Runs directly on Ubuntu (24.04 LTS recommended; 22.04 is tested too, and 26.04 w
 | Update to the latest code | `cd /opt/sql-playground && git pull && sudo ./deploy/install.sh` |
 | Change a setting | `sudo nano /etc/sql-playground/config.env && sudo systemctl restart sql-playground` |
 | Back up now | `sudo /usr/local/lib/sql-playground/backup.sh` |
+| Find out why the site doesn't load (checks app → nginx → Cloudflare) | `sudo /opt/sql-playground/deploy/scripts/doctor.sh your.domain` |
 
 **Backups:** only `playground_app` holds data worth keeping (accounts, saved queries, progress); learner copies are recreated automatically after a restore. To restore, on the same server or a new one after `install.sh`:
 ```bash

@@ -1,9 +1,19 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
+
+// Cloudflare's Rocket Loader rewrites <script> tags and breaks module scripts,
+// leaving a blank page. data-cfasync="false" tells it to leave a script alone.
+const skipRocketLoader: Plugin = {
+  name: 'skip-rocket-loader',
+  transformIndexHtml: {
+    order: 'post',
+    handler: (html) => html.replace(/<script\b(?![^>]*data-cfasync)/g, '<script data-cfasync="false"'),
+  },
+}
 
 // The Go API serves /api; in development Vite proxies to it.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), skipRocketLoader],
   server: {
     port: 5173,
     proxy: {

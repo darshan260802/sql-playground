@@ -269,6 +269,12 @@ func (s *Server) staticHandler() http.Handler {
 			fs.ServeHTTP(w, r)
 			return
 		}
+		// A missing build file must stay a 404: served as index.html, a browser
+		// (or Cloudflare's cache) would take the page for the script.
+		if strings.HasPrefix(p, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
 		// SPA fallback: client-side routes render index.html.
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(root, "index.html"))
