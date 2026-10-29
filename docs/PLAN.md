@@ -8,7 +8,7 @@ A learning-focused SQL playground in the spirit of sql.clickhouse.com, but **wri
 
 | Question | Decision |
 |---|---|
-| SQL engine | **MySQL 8.4 LTS**: "support all SQL syntax and behave the same as MySQL", so it *is* MySQL |
+| SQL engine | **MySQL 8** (8.0.31+, tested on 8.0 and 8.4): "support all SQL syntax and behave the same as MySQL", so it *is* MySQL |
 | Data domains | E-commerce, HR / org chart, Finance / markets |
 | Backend | Go |
 | Frontend | React + Vite + TypeScript |
@@ -66,6 +66,14 @@ Rather than parsing SQL to decide what's allowed (fragile), every request runs u
 | DDL (9) | Setup (cleanup) → solution → check → cleanup → learner's SQL → check. Checks inspect `information_schema` or exercise behaviour (e.g. insert invalid rows with `INSERT IGNORE` to test CHECK constraints, fire a trigger inside a rolled-back transaction). |
 
 A Go test runs every exercise against real MySQL (verified on 8.0.46 and 8.4.13). It asserts that the solution passes, that a wrong answer fails, and that each check takes under 8 seconds.
+
+### Deployment
+
+No containers. The first version shipped with Docker Compose; it was replaced because it added moving parts (a second firewall layer that bypasses ufw, image builds, volumes) without adding anything a single-purpose VPS needs.
+
+- **MySQL** comes from Ubuntu's own packages (8.0 on 24.04), with the settings in `deploy/mysql/playground.cnf` dropped into `/etc/mysql/mysql.conf.d/`. The app logs in as a dedicated `sqlpg_admin@127.0.0.1` account; root keeps Ubuntu's socket-only login.
+- **The app** is one static Go binary plus the built website, run by systemd as an unprivileged `sqlpg` user with a read-only view of the system (`ProtectSystem=strict` and friends). It listens on `127.0.0.1` only, so ufw and nginx stay in charge of what's public.
+- **`deploy/install.sh`** does the whole install and every later update: packages, MySQL config and account, a private Go and Node toolchain used only for building (so it never clashes with other projects), the build itself (as the `sqlpg` user), the service, the `sqlpg-admin` command and a nightly backup. It keeps settings and data, and checks that the app answers before it finishes.
 
 ## Frontend design
 

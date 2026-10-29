@@ -1,6 +1,0 @@
-.git
-**/node_modules
-frontend/dist
-backend/bin
-deploy/.env
-*.log

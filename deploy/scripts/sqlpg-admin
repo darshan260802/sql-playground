@@ -1,0 +1,14 @@
+#!/bin/sh
+# Admin commands for SQL Playground, run with the service's settings.
+# deploy/install.sh installs this as /usr/local/bin/sqlpg-admin.
+#
+#   sudo sqlpg-admin list-users
+#   sudo sqlpg-admin reset-password EMAIL    prints a new password to give the learner
+#   sudo sqlpg-admin reset-db EMAIL          restores their database to the original data
+#   sudo sqlpg-admin delete-user EMAIL       removes the account and its database
+set -e
+[ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+set -a
+. /etc/sql-playground/config.env
+set +a
+exec /usr/local/lib/sql-playground/bin/sqlpg admin "$@"

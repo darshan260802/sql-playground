@@ -6,7 +6,7 @@ A self-hosted MySQL playground for learning SQL on realistic data, from your fir
 - **Signed-in learners** get a **private copy of the whole database** where `INSERT`, `UPDATE`, `DELETE`, `CREATE`, triggers and stored procedures all work. Changes only affect their copy, and **Reset database** restores the original in about 10 seconds.
 - **30 lessons with 116 auto-checked exercises** take you from basics to analytics case studies (cohorts, gaps-and-islands, RFM, drawdowns).
 
-It's built for a small group (up to 20 accounts) on a single VPS. Behaviour matches real MySQL, because it *is* real MySQL 8.4.
+It's built for a small group (up to 20 accounts) on a single VPS. Behaviour matches real MySQL, because it *is* real MySQL 8.
 
 ![Playground](docs/screenshots/playground-dark.png)
 
@@ -53,10 +53,10 @@ The data has realistic texture: growth over time, Black Friday and holiday peaks
 ## Architecture
 
 ```
-browser ──▶ nginx (TLS) ──▶ app container :8080 (127.0.0.1 only)
+browser ──▶ nginx (TLS) ──▶ sql-playground service, 127.0.0.1:8080 (systemd)
                               │  Go API + built React frontend
                               ▼
-                            mysql:8.4 container (no published port)
+                            MySQL 8 from Ubuntu's packages (localhost only)
                               ├─ core            pristine dataset, read-only to everyone
                               ├─ u_<id>          each learner's private copy (own tablespace)
                               └─ playground_app  accounts, sessions, saved queries, history, progress
@@ -74,35 +74,31 @@ More detail and the reasoning behind each choice: [docs/PLAN.md](docs/PLAN.md).
 ```
 backend/    Go API, dataset generator, lessons (Markdown) and exercise checker
 frontend/   React + Vite + TypeScript app
-deploy/     docker-compose.yml, MySQL config, nginx site config, .env.example
-Dockerfile  builds frontend + backend into one small image
-docs/       plan and screenshots
+deploy/     install.sh, systemd unit, settings template, MySQL config, nginx sites, scripts
+docs/       plan, VPS setup guide (PDF) and screenshots
 ```
 
-## Deploying on your VPS (Docker Compose + nginx + ufw)
+## Deploying on your VPS (nginx + ufw, no Docker)
 
-This setup coexists with nginx and ufw already serving other projects: nothing new is exposed to the internet.
+Runs directly on Ubuntu (24.04 LTS recommended; 22.04 is tested too, and 26.04 with its MySQL 8.4 should work) next to whatever nginx and ufw already serve: nothing new is exposed to the internet.
 
 > **Domain on Cloudflare?** Follow the step-by-step **[VPS setup guide (PDF)](docs/vps-setup-guide.pdf)**. It goes from a fresh Ubuntu server to HTTPS behind Cloudflare, using `deploy/nginx/sql-playground-cloudflare.conf` (origin certificate, Full (strict)) and `deploy/scripts/cloudflare-realip.sh` (real visitor IPs, optional Cloudflare-only firewall). The steps below are the short version for a server that already has nginx and certbot.
 
-1. **Install Docker** (with the compose plugin) if it isn't installed yet: https://docs.docker.com/engine/install/
-
-2. **Clone and configure**
+1. **Get the code**
    ```bash
-   git clone https://github.com/darshan260802/sql-playground.git
+   sudo mkdir -p /opt/sql-playground && sudo chown "$USER": /opt/sql-playground
    ```
    ```bash
-   cd sql-playground/deploy && cp .env.example .env
+   git clone https://github.com/darshan260802/sql-playground.git /opt/sql-playground
    ```
-   Edit `.env`: set a long random `MYSQL_ROOT_PASSWORD` (e.g. `openssl rand -base64 32`), and change `APP_PORT` if 8080 is already used on the host.
 
-3. **Start it**
+2. **Install** (about 2–5 minutes the first time)
    ```bash
-   docker compose up -d --build
+   cd /opt/sql-playground && sudo ./deploy/install.sh
    ```
-   The first start generates the dataset (about 20–30s). Follow it with `docker compose logs -f app` until you see `listening on :8080`.
+   The script installs MySQL from Ubuntu's packages, applies `deploy/mysql/playground.cnf`, creates the app's MySQL account with a random password, builds the app with its own copy of Go and Node.js (kept in `/usr/local/lib/sql-playground/toolchain`, so it doesn't touch any you already have), and starts the `sql-playground` systemd service. It finishes once the app answers on `127.0.0.1:8080`. If port 8080 is taken, use `sudo ./deploy/install.sh --port 8081`.
 
-4. **nginx**: copy `deploy/nginx/sql-playground.conf` to `/etc/nginx/sites-available/`, replace `sql.example.com` with your domain (and the port if you changed `APP_PORT`), then:
+3. **nginx**: copy `deploy/nginx/sql-playground.conf` to `/etc/nginx/sites-available/`, replace `sql.example.com` with your domain (and the port if you changed it), then:
    ```bash
    sudo ln -s /etc/nginx/sites-available/sql-playground.conf /etc/nginx/sites-enabled/
    ```
@@ -113,46 +109,56 @@ This setup coexists with nginx and ufw already serving other projects: nothing n
    sudo certbot --nginx -d sql.example.com
    ```
 
-5. **ufw**: nothing to open. The app is bound to `127.0.0.1` (Docker-published ports bypass ufw, so binding to loopback is what keeps ufw in charge), and MySQL isn't published at all. Your existing `Nginx Full` / `OpenSSH` rules are enough.
+4. **ufw**: nothing to open. The app listens on `127.0.0.1` only and MySQL on localhost only, so your existing `Nginx Full` / `OpenSSH` rules are enough.
 
-> Behind HTTPS keep `COOKIE_SECURE=true`. For a quick test over plain HTTP set it to `false`, otherwise the browser won't send the login cookie.
+> Behind HTTPS keep `SQLPG_COOKIE_SECURE=true`. For a quick test over plain HTTP set it to `false`, otherwise the browser won't send the login cookie.
+
+### What gets installed where
+
+| Path | What it is |
+|---|---|
+| `/etc/sql-playground/config.env` | settings and the app's MySQL password (root-only) |
+| `/etc/systemd/system/sql-playground.service` | the service, run as the unprivileged `sqlpg` user |
+| `/usr/local/lib/sql-playground/` | the app (`bin/sqlpg`, `web/`), its build toolchain and build cache |
+| `/usr/local/bin/sqlpg-admin` | admin commands (below) |
+| `/etc/mysql/mysql.conf.d/zz-sql-playground.cnf` | MySQL settings (server-wide: read it first if other projects share this MySQL) |
+| `/etc/cron.d/sql-playground` | nightly backup at 03:17 |
+| `/var/backups/sql-playground/` | backups (the last 14) |
 
 ### Resources (measured)
 
-- **Disk:** ~1.1 GB for MySQL's base files and the core data, plus **148 MB per learner**, up to the 300 MB quota. 20 learners need 3–6 GB in total.
-- **RAM:** MySQL about 1.2 GB (2 GB buffer pool cap, `mem_limit` 3 GB); the app about 30 MB.
-- To use less RAM, lower `innodb_buffer_pool_size` in `deploy/mysql/playground.cnf` (e.g. `1G`).
+- **Disk:** ~1.1 GB for MySQL's base files and the core data, plus **148 MB per learner**, up to the 300 MB quota. 20 learners need 3–6 GB in total. The build toolchain and caches take about 650 MB.
+- **RAM:** MySQL about 1.2 GB (2 GB buffer pool cap); the app about 30 MB.
+- To use less RAM, lower `innodb_buffer_pool_size` in `deploy/mysql/playground.cnf` (e.g. `1G`) and run `install.sh` again.
 
-### Admin tasks
+### Everyday operations
 
-There is no email sending, so the admin resets forgotten passwords:
+| Task | Command |
+|---|---|
+| Status / logs | `systemctl status sql-playground` · `journalctl -u sql-playground -f` |
+| List accounts and storage | `sudo sqlpg-admin list-users` |
+| Reset a forgotten password (prints a new one; there's no email) | `sudo sqlpg-admin reset-password EMAIL` |
+| Restore a learner's data to the original | `sudo sqlpg-admin reset-db EMAIL` |
+| Delete an account and its database | `sudo sqlpg-admin delete-user EMAIL` |
+| Update to the latest code | `cd /opt/sql-playground && git pull && sudo ./deploy/install.sh` |
+| Change a setting | `sudo nano /etc/sql-playground/config.env && sudo systemctl restart sql-playground` |
+| Back up now | `sudo /usr/local/lib/sql-playground/backup.sh` |
 
+**Backups:** only `playground_app` holds data worth keeping (accounts, saved queries, progress); learner copies are recreated automatically after a restore. To restore, on the same server or a new one after `install.sh`:
 ```bash
-docker compose exec app /app/sqlpg admin list-users
+sudo gunzip -c /var/backups/sql-playground/app-2026-01-31.sql.gz | sudo mysql
 ```
 ```bash
-docker compose exec app /app/sqlpg admin reset-password someone@example.com
-```
-```bash
-docker compose exec app /app/sqlpg admin reset-db someone@example.com
-```
-```bash
-docker compose exec app /app/sqlpg admin delete-user someone@example.com
-```
-
-**Updating:** `git pull && docker compose up -d --build` (from `deploy/`). Learner data lives in the `mysql-data` volume and survives rebuilds.
-
-**Backups:** only `playground_app` holds data worth keeping (accounts, saved queries, progress); learner copies are recreated automatically after a restore. `deploy/scripts/backup.sh` writes a dated, compressed dump to `/var/backups/sql-playground/` and keeps the last 14 (restore steps are in the script header):
-```bash
-sudo ./scripts/backup.sh
+sudo systemctl restart sql-playground
 ```
 
 ### Configuration
 
-All settings are environment variables (set through `deploy/.env` / `docker-compose.yml`):
+All settings live in `/etc/sql-playground/config.env` (template: `deploy/config.env.example`):
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `SQLPG_LISTEN` | 127.0.0.1:8080 | where nginx reaches the app |
 | `SQLPG_MAX_USERS` | 20 | signups close when this many accounts exist |
 | `SQLPG_USER_QUOTA_MB` | 300 | storage limit per learner database |
 | `SQLPG_QUERY_TIMEOUT` / `SQLPG_ANON_QUERY_TIMEOUT` | 30s / 15s | per-run time limit |
@@ -160,21 +166,31 @@ All settings are environment variables (set through `deploy/.env` / `docker-comp
 | `SQLPG_MAX_CONCURRENT` | 8 | queries executing at once, server-wide |
 | `SQLPG_SESSION_IDLE` | 15m | idle time before a learner's SQL session (and open transaction) is closed |
 | `SQLPG_SESSION_DAYS` | 30 | login cookie lifetime |
-| `SQLPG_COOKIE_SECURE` | true in compose | send cookies over HTTPS only |
-| `SQLPG_TRUST_PROXY` | true in compose | take client IPs from nginx headers (for rate limits) |
+| `SQLPG_COOKIE_SECURE` | true | send cookies over HTTPS only |
+| `SQLPG_TRUST_PROXY` | true | take client IPs from nginx headers (for rate limits) |
+
+### Uninstall
+
+```bash
+sudo systemctl disable --now sql-playground
+```
+```bash
+sudo rm -rf /etc/systemd/system/sql-playground.service /usr/local/lib/sql-playground /usr/local/bin/sqlpg-admin /etc/cron.d/sql-playground /etc/sql-playground
+```
+The databases stay in MySQL until you drop them (`core`, `playground_app`, `u_*`) or remove MySQL itself.
 
 ## Local development
 
-Requirements: Go 1.24+, Node 22+, and MySQL 8.0.31+ (8.4 recommended). A throwaway MySQL in Docker works:
+Requirements: Go 1.24+, Node 22+, and MySQL 8.0.31+. On Ubuntu, `sudo apt install mysql-server`, then create a development account:
 
 ```bash
-docker run -d --name sqlpg-mysql -e MYSQL_ROOT_PASSWORD=dev -p 127.0.0.1:3306:3306 -v "$PWD/deploy/mysql/playground.cnf:/etc/mysql/conf.d/playground.cnf:ro" mysql:8.4
+sudo mysql -e "CREATE USER 'dev'@'127.0.0.1' IDENTIFIED BY 'dev'; GRANT ALL ON *.* TO 'dev'@'127.0.0.1' WITH GRANT OPTION;"
 ```
 
 API on :8080 (generates the dataset on first start):
 
 ```bash
-cd backend && SQLPG_MYSQL_ADMIN_PASSWORD=dev go run ./cmd/sqlpg serve
+cd backend && SQLPG_MYSQL_ADMIN_USER=dev SQLPG_MYSQL_ADMIN_PASSWORD=dev go run ./cmd/sqlpg serve
 ```
 
 Frontend on :5173 with hot reload (proxies `/api` to :8080):
@@ -192,7 +208,7 @@ cd backend && go test ./...
 The lesson suite runs **every exercise against a real MySQL**. It checks that the solution passes its own check and that a wrong answer fails:
 
 ```bash
-cd backend && SQLPG_TEST_DSN='root:dev@tcp(127.0.0.1:3306)/' go test ./internal/lessons/ -run TestSolutions -v
+cd backend && SQLPG_TEST_DSN='dev:dev@tcp(127.0.0.1:3306)/' go test ./internal/lessons/ -run TestSolutions -v
 ```
 
 ### Writing lessons

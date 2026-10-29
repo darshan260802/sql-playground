@@ -6,7 +6,7 @@ backend/bin/
 
 # local configuration
 .env
-deploy/.env
+deploy/config.env
 
 # editors / OS
 .DS_Store

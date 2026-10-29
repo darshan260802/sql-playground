@@ -1,3 +1,10 @@
+# MySQL settings for SQL Playground. deploy/install.sh installs this file as
+# /etc/mysql/mysql.conf.d/zz-sql-playground.cnf, so it is read after Ubuntu's own
+# mysqld.cnf, and restarts MySQL when it changes.
+#
+# These are server-wide settings. If other projects use the same MySQL, check that
+# nothing below (no binary log, no LOAD DATA, UTC time zone) gets in their way.
+
 [mysqld]
 # --- sized for an 8 GB VPS that also runs other projects
 innodb_buffer_pool_size = 2G
@@ -18,7 +25,6 @@ secure_file_priv = NULL
 innodb_file_per_table = ON
 information_schema_stats_expiry = 0
 performance_schema = ON
-skip_name_resolve = ON
 character_set_server = utf8mb4
 collation_server = utf8mb4_0900_ai_ci
 default_time_zone = '+00:00'
