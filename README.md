@@ -83,6 +83,8 @@ docs/       plan and screenshots
 
 This setup coexists with nginx and ufw already serving other projects: nothing new is exposed to the internet.
 
+> **Domain on Cloudflare?** Follow the step-by-step **[VPS setup guide (PDF)](docs/vps-setup-guide.pdf)**. It goes from a fresh Ubuntu server to HTTPS behind Cloudflare, using `deploy/nginx/sql-playground-cloudflare.conf` (origin certificate, Full (strict)) and `deploy/scripts/cloudflare-realip.sh` (real visitor IPs, optional Cloudflare-only firewall). The steps below are the short version for a server that already has nginx and certbot.
+
 1. **Install Docker** (with the compose plugin) if it isn't installed yet: https://docs.docker.com/engine/install/
 
 2. **Clone and configure**
@@ -140,9 +142,9 @@ docker compose exec app /app/sqlpg admin delete-user someone@example.com
 
 **Updating:** `git pull && docker compose up -d --build` (from `deploy/`). Learner data lives in the `mysql-data` volume and survives rebuilds.
 
-**Backups:** only `playground_app` holds data worth keeping (accounts, saved queries, progress); learner copies can always be recreated.
+**Backups:** only `playground_app` holds data worth keeping (accounts, saved queries, progress); learner copies are recreated automatically after a restore. `deploy/scripts/backup.sh` writes a dated, compressed dump to `/var/backups/sql-playground/` and keeps the last 14 (restore steps are in the script header):
 ```bash
-docker compose exec mysql sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqldump -uroot --single-transaction playground_app' > playground_app.sql
+sudo ./scripts/backup.sh
 ```
 
 ### Configuration
