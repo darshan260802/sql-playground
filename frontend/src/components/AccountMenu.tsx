@@ -1,14 +1,15 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
-import { Database, KeyRound, LogOut, RotateCcw, Trash2 } from 'lucide-react'
+import { KeyRound, LogOut, RotateCcw, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../state/auth'
 import { useTabs, useUI } from '../state/stores'
 import { formatBytes, spring } from '../lib/util'
 import { Confirm, Dialog, Popover } from './Overlay'
 
-export function AccountMenu() {
+/** The signed-in learner's account: their database copy, its storage, and account actions. */
+export function AccountMenu({ placement }: { placement: 'rail' | 'bar' }) {
   const { user, database, signOut, refresh } = useAuth()
   const [open, setOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -23,6 +24,7 @@ export function AccountMenu() {
   const quota = database?.quota_bytes ?? 1
   const pct = Math.min(100, (usage / quota) * 100)
   const busy = database?.status === 'provisioning' || database?.status === 'resetting'
+  const initial = user.name.trim().charAt(0).toUpperCase()
 
   const doReset = async () => {
     setResetting(true)
@@ -41,55 +43,72 @@ export function AccountMenu() {
     }
   }
 
+  const panel = (
+    <>
+      <div className="menu-head">
+        <div className="avatar lg">{initial}</div>
+        <div style={{ minWidth: 0 }}>
+          <div className="menu-name">{user.name}</div>
+          <div className="menu-email">{user.email}</div>
+        </div>
+      </div>
+      <div className="menu-section">
+        <div className="usage-row">
+          <span>Your database</span>
+          <span className="mono">{database?.schema}</span>
+        </div>
+        {busy ? (
+          <div className="usage-note">Preparing your copy…</div>
+        ) : (
+          <>
+            <div className="meter" role="meter" aria-valuemin={0} aria-valuemax={quota} aria-valuenow={usage} aria-label="Storage used">
+              <motion.span initial={false} animate={{ width: `${pct}%` }} transition={spring} className={pct > 90 ? 'over' : ''} />
+            </div>
+            <div className="usage-note num">
+              {formatBytes(usage)} of {formatBytes(quota)}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="menu-list">
+        <button className="menu-item" onClick={() => setConfirmReset(true)} disabled={busy}>
+          <RotateCcw /> Reset to the original data
+        </button>
+        <button className="menu-item" onClick={() => { setPwOpen(true); setOpen(false) }}>
+          <KeyRound /> Change password
+        </button>
+        <button className="menu-item" onClick={() => { signOut(); setOpen(false); toast('Signed out') }}>
+          <LogOut /> Sign out
+        </button>
+        <div className="menu-sep" />
+        <button className="menu-item danger" onClick={() => { setDelOpen(true); setOpen(false) }}>
+          <Trash2 /> Delete account
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <>
-      <button ref={anchor} className="avatar-btn" onClick={() => setOpen((o) => !o)} aria-label="Account menu" aria-expanded={open}>
-        <span className="avatar">{user.name.trim().charAt(0).toUpperCase()}</span>
-      </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} width={300}>
-        <div className="menu-head">
-          <div className="avatar lg">{user.name.trim().charAt(0).toUpperCase()}</div>
-          <div style={{ minWidth: 0 }}>
-            <div className="menu-name">{user.name}</div>
-            <div className="menu-email">{user.email}</div>
-          </div>
-        </div>
-        <div className="menu-section">
-          <div className="usage-row">
-            <span>
-              <Database size={14} /> Your database
-            </span>
-            <span className="mono muted">{database?.schema}</span>
-          </div>
-          {busy ? (
-            <div className="usage-note">Preparing your copy…</div>
-          ) : (
-            <>
-              <div className="meter" role="meter" aria-valuemin={0} aria-valuemax={quota} aria-valuenow={usage} aria-label="Storage used">
-                <motion.span initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={spring} className={pct > 90 ? 'over' : ''} />
-              </div>
-              <div className="usage-note">
-                {formatBytes(usage)} of {formatBytes(quota)} used · the original data is {formatBytes(database?.core_bytes ?? 0)}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="menu-list">
-          <button className="menu-item" onClick={() => setConfirmReset(true)} disabled={busy}>
-            <RotateCcw /> Reset database to original
-          </button>
-          <button className="menu-item" onClick={() => { setPwOpen(true); setOpen(false) }}>
-            <KeyRound /> Change password
-          </button>
-          <button className="menu-item" onClick={() => { signOut(); setOpen(false); toast('Signed out') }}>
-            <LogOut /> Sign out
-          </button>
-          <div className="menu-sep" />
-          <button className="menu-item danger" onClick={() => { setDelOpen(true); setOpen(false) }}>
-            <Trash2 /> Delete account
-          </button>
-        </div>
-      </Popover>
+      {placement === 'rail' ? (
+        <button ref={anchor} className="rail-item" onClick={() => setOpen((o) => !o)} aria-label="Account" aria-expanded={open} data-tip={open ? undefined : 'Account'}>
+          <span className="avatar">{initial}</span>
+        </button>
+      ) : (
+        <button ref={anchor} className="bottombar-item" onClick={() => setOpen(true)} aria-expanded={open}>
+          <span className="avatar sm">{initial}</span>
+          <span>Account</span>
+        </button>
+      )}
+      {placement === 'rail' ? (
+        <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} placement="right-end" width={300}>
+          {panel}
+        </Popover>
+      ) : (
+        <Dialog open={open} onClose={() => setOpen(false)} title="Account">
+          <div className="account-sheet">{panel}</div>
+        </Dialog>
+      )}
       <Confirm
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
@@ -145,7 +164,7 @@ function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void 
           <span className="help">At least 8 characters.</span>
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
-        <button className="btn btn-primary btn-lg" disabled={busy || !current || next.length < 8}>
+        <button className="btn btn-primary btn-lg btn-block" disabled={busy || !current || next.length < 8}>
           {busy && <span className="spinner" />}Change password
         </button>
       </form>
@@ -181,7 +200,7 @@ function DeleteDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <input id="del-pw" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
-        <button className="btn btn-danger btn-lg" disabled={busy || !password}>
+        <button className="btn btn-danger btn-lg btn-block" disabled={busy || !password}>
           {busy && <span className="spinner" />}Delete account permanently
         </button>
       </form>

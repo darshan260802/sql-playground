@@ -2,16 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock, Eye, Lightbulb, Lock, Play, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Eye, Lightbulb, Lock, Play, Sparkles } from 'lucide-react'
 import { api, ApiError, newRunId, type CheckOutcome, type Exercise, type Lesson as LessonT, type StatementResult } from '../lib/api'
 import { useAuth } from '../state/auth'
 import { addLocalSolved, localSolved, useTabs, useUI } from '../state/stores'
-import { modKey, spring, springMomentum, storage } from '../lib/util'
+import { modKey, spring, springMomentum, springSnappy, storage } from '../lib/util'
+import { useIsCompact } from '../lib/hooks'
+import { Segmented } from '../components/Segmented'
 import { Markdown, HighlightedSQL } from '../components/Markdown'
 import { SqlEditor, type EditorHandle } from '../components/SqlEditor'
 import { DataGrid } from '../components/DataGrid'
 
 const KIND_LABEL: Record<Exercise['kind'], string> = { select: 'Query', dml: 'Changes data', ddl: 'Schema design' }
+
+function scrollMainToTop() {
+  document.querySelector('.app-main')?.scrollTo({ top: 0 })
+}
 
 export function Lesson() {
   const { slug = '' } = useParams()
@@ -21,6 +27,8 @@ export function Lesson() {
   const [error, setError] = useState('')
   const [idx, setIdx] = useState(0)
   const [solved, setSolved] = useState<Set<string>>(new Set())
+  const mobile = useIsCompact()
+  const [view, setView] = useState<'read' | 'practice'>('read')
 
   useEffect(() => {
     setLesson(null)
@@ -36,7 +44,8 @@ export function Lesson() {
         setIdx(firstOpen === -1 ? 0 : firstOpen)
       })
       .catch((e) => setError((e as ApiError).message))
-    window.scrollTo({ top: 0 })
+    setView('read')
+    scrollMainToTop()
   }, [slug, user])
 
   const openInPlayground = useCallback(
@@ -49,8 +58,8 @@ export function Lesson() {
 
   if (error) {
     return (
-      <div className="lesson-missing">
-        <h2>{error}</h2>
+      <div className="page-empty">
+        <h1>{error}</h1>
         <Link to="/learn" className="btn">
           <ArrowLeft /> All lessons
         </Link>
@@ -59,12 +68,15 @@ export function Lesson() {
   }
   if (!lesson) {
     return (
-      <div className="lesson-layout">
+      <div className="lesson-page" aria-busy="true">
+        <div className="lesson-head">
+          <div className="skeleton" style={{ height: 13, width: 140, marginBottom: 14 }} />
+          <div className="skeleton" style={{ height: 28, width: '50%', marginBottom: 12 }} />
+          <div className="skeleton" style={{ height: 13, width: 220 }} />
+        </div>
         <div className="lesson-article">
-          <div className="skeleton" style={{ height: 22, width: 160, marginBottom: 18 }} />
-          <div className="skeleton" style={{ height: 48, width: '70%', marginBottom: 28 }} />
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 16, width: `${70 + ((i * 13) % 30)}%`, marginBottom: 12 }} />
+            <div key={i} className="skeleton" style={{ height: 15, width: `${70 + ((i * 13) % 30)}%`, marginBottom: 14 }} />
           ))}
         </div>
       </div>
@@ -72,63 +84,92 @@ export function Lesson() {
   }
 
   const ex = lesson.exercises[idx]
-  const allDone = lesson.exercises.every((e) => solved.has(e.id))
+  const nSolved = lesson.exercises.filter((e) => solved.has(e.id)).length
+  const allDone = nSolved === lesson.exercises.length
+  const showRead = !mobile || view === 'read'
+  const showPractice = !mobile || view === 'practice'
+  const switchView = (v: 'read' | 'practice') => {
+    setView(v)
+    scrollMainToTop()
+  }
 
   return (
-    <div className="lesson-layout">
-      <article className="lesson-article">
+    <div className="lesson-page">
+      <header className="lesson-head">
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link to="/learn">Learn</Link>
-          <span>/</span>
+          <span aria-hidden="true">/</span>
           <span>{lesson.module}</span>
         </nav>
-        <h1 className="lesson-title">{lesson.title}</h1>
-        <div className="lesson-meta">
-          <span className={`level level-${lesson.level.toLowerCase()}`}>{lesson.level}</span>
-          <span>
-            <Clock size={14} /> {lesson.minutes} min
-          </span>
-          <span>{lesson.exercises.length} exercises</span>
-        </div>
-        <p className="lesson-summary">{lesson.summary}</p>
-        <Markdown text={lesson.body} onOpenSql={openInPlayground} className="lesson-body" />
-        <div className="lesson-nav">
-          {lesson.prev ? (
-            <Link to={`/learn/${lesson.prev.slug}`} className="lesson-nav-link">
-              <span className="eyebrow">Previous</span>
-              <span>
-                <ArrowLeft size={15} /> {lesson.prev.title}
-              </span>
-            </Link>
-          ) : (
-            <span />
-          )}
-          {lesson.next && (
-            <Link to={`/learn/${lesson.next.slug}`} className="lesson-nav-link next">
-              <span className="eyebrow">Next</span>
-              <span>
-                {lesson.next.title} <ArrowRight size={15} />
-              </span>
-            </Link>
-          )}
-        </div>
-      </article>
+        <h1>{lesson.title}</h1>
+        <p className="lesson-meta tnum">
+          {lesson.level} · {lesson.minutes} min · {nSolved} of {lesson.exercises.length} exercises solved
+        </p>
+      </header>
 
+      {mobile && (
+        <Segmented
+          ruled
+          full
+          className="lesson-switch"
+          label="Show"
+          value={view}
+          onChange={switchView}
+          options={[
+            { value: 'read', label: 'Lesson' },
+            { value: 'practice', label: <>Exercises <span className="count">{nSolved}/{lesson.exercises.length}</span></> },
+          ]}
+        />
+      )}
+
+      {showRead && (
+        <article className="lesson-article">
+          <p className="lesson-summary">{lesson.summary}</p>
+          <Markdown text={lesson.body} onOpenSql={openInPlayground} className="lesson-body" />
+          {mobile && (
+            <button className="btn btn-primary btn-lg btn-block practice-cta" onClick={() => switchView('practice')}>
+              {allDone ? 'Review the exercises' : `Practice: ${lesson.exercises.length - nSolved} exercises to go`} <ArrowRight />
+            </button>
+          )}
+          <nav className="lesson-nav" aria-label="Other lessons">
+            {lesson.prev ? (
+              <Link to={`/learn/${lesson.prev.slug}`} className="lesson-nav-link">
+                <span className="faint small">Previous lesson</span>
+                <span>
+                  <ArrowLeft size={15} /> {lesson.prev.title}
+                </span>
+              </Link>
+            ) : (
+              <span />
+            )}
+            {lesson.next && (
+              <Link to={`/learn/${lesson.next.slug}`} className="lesson-nav-link next">
+                <span className="faint small">Next lesson</span>
+                <span>
+                  {lesson.next.title} <ArrowRight size={15} />
+                </span>
+              </Link>
+            )}
+          </nav>
+        </article>
+      )}
+
+      {showPractice && (
       <aside className="exercise-panel" aria-label="Exercises">
         <div className="exercise-sticky">
-          <div className="stepper" role="tablist" aria-label="Exercises in this lesson">
-            {lesson.exercises.map((e, i) => (
-              <button key={e.id} role="tab" aria-selected={i === idx} className={`step ${solved.has(e.id) ? 'done' : ''}`} onClick={() => setIdx(i)} title={e.title}>
-                {i === idx && <motion.span layoutId="step-ring" className="step-ring" transition={spring} />}
-                {solved.has(e.id) ? <Check /> : i + 1}
-              </button>
-            ))}
-            <span className="stepper-label">
-              {allDone ? 'Lesson complete' : `Exercise ${idx + 1} of ${lesson.exercises.length}`}
-            </span>
+          <div className="exercise-tabs">
+            <div className="tabs ruled" role="tablist" aria-label="Exercises in this lesson">
+              {lesson.exercises.map((e, i) => (
+                <button key={e.id} role="tab" aria-selected={i === idx} className={solved.has(e.id) ? 'done' : ''} onClick={() => setIdx(i)} title={e.title} aria-label={`Exercise ${i + 1}${solved.has(e.id) ? ', solved' : ''}`}>
+                  {solved.has(e.id) ? <Check className="step-check" /> : <span className="num">{i + 1}</span>}
+                  {i === idx && <motion.span layoutId="ex-line" className="tab-line" transition={springSnappy} />}
+                </button>
+              ))}
+            </div>
+            <span className="exercise-count faint small tnum">{allDone ? 'All solved' : `Exercise ${idx + 1} of ${lesson.exercises.length}`}</span>
           </div>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={ex.id} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ ...spring, duration: 0.28 }}>
+            <motion.div key={ex.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
               <ExerciseCard
                 ex={ex}
                 signedIn={!!user}
@@ -145,6 +186,7 @@ export function Lesson() {
           </AnimatePresence>
         </div>
       </aside>
+      )}
     </div>
   )
 }
@@ -230,19 +272,20 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
   }
 
   return (
-    <div className="exercise card">
+    <div className="exercise">
       <div className="exercise-head">
-        <h3>{ex.title}</h3>
-        <div className="exercise-badges">
-          <span className="badge">{KIND_LABEL[ex.kind]}</span>
-          {ex.ordered && <span className="badge" title="Row order matters">Ordered</span>}
-          {solved && (
-            <span className="badge badge-success">
-              <Check size={12} /> Solved
-            </span>
-          )}
-        </div>
+        <h2>{ex.title}</h2>
+        {solved && (
+          <span className="pill pill-positive">
+            <Check /> Solved
+          </span>
+        )}
       </div>
+      <p className="exercise-kind faint small">
+        {KIND_LABEL[ex.kind]}
+        {ex.ordered ? ' · row order matters' : ''}
+        {ex.requires_login ? ' · runs on your copy' : ''}
+      </p>
       <Markdown text={ex.prompt} className="exercise-prompt" />
 
       {ex.expected && (
@@ -252,8 +295,8 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
               <ChevronDown size={15} />
             </motion.span>
             Expected result
-            <span className="muted">
-              · {ex.expected.row_count} {ex.expected.row_count === 1 ? 'row' : 'rows'}
+            <span className="faint tnum">
+              {ex.expected.row_count} {ex.expected.row_count === 1 ? 'row' : 'rows'}
               {ex.expected.rows.length < ex.expected.row_count ? `, first ${ex.expected.rows.length} shown` : ''}
             </span>
           </button>
@@ -273,13 +316,13 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
           <div>
             <b>This one changes data.</b> It runs on your own private copy of the database, so you need a free account.
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => openAuth('signup')}>
+          <button className="btn btn-sm" onClick={() => openAuth('signup')}>
             Create account
           </button>
         </div>
       ) : (
         <>
-          {ex.requires_login && !dbReady && <div className="sidebar-note small">Your database copy is still being prepared…</div>}
+          {ex.requires_login && !dbReady && <p className="faint small">Your database copy is still being prepared…</p>}
           <div className="exercise-editor">
             <SqlEditor
               docKey={ex.id}
@@ -294,20 +337,20 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
           </div>
           <div className="exercise-actions">
             <button className="btn btn-primary" onClick={check} disabled={busy !== null}>
-              {busy === 'check' ? <span className="spinner" /> : <Check />} Check <kbd className="hide-sm">{modKey}↵</kbd>
+              {busy === 'check' ? <span className="spinner" /> : <Check />} Check <kbd className="hide-touch">{modKey}↵</kbd>
             </button>
             {ex.kind === 'select' && (
               <button className="btn" onClick={runOnly} disabled={busy !== null}>
                 {busy === 'run' ? <span className="spinner" /> : <Play />} Run
               </button>
             )}
-            <div className="toolbar-spacer" />
+            <div className="spacer" />
             {ex.hint && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowHint((s) => !s)} aria-expanded={showHint}>
+              <button className="btn btn-text" onClick={() => setShowHint((s) => !s)} aria-expanded={showHint}>
                 <Lightbulb /> Hint
               </button>
             )}
-            <button className="btn btn-ghost btn-sm" onClick={reveal} disabled={solution !== null}>
+            <button className="btn btn-text" onClick={reveal} disabled={solution !== null}>
               <Eye /> Solution
             </button>
           </div>
@@ -369,7 +412,9 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
 
       {outcome?.result && !outcome.correct && outcome.result.columns.length > 0 && (
         <div className="your-result">
-          <div className="eyebrow">Your result · {outcome.result.row_count} rows</div>
+          <h3>
+            Your result <span className="faint tnum">{outcome.result.row_count} rows</span>
+          </h3>
           <DataGrid columns={outcome.result.columns} rows={outcome.result.rows} dense maxHeight={180} />
         </div>
       )}
@@ -388,7 +433,9 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
             </div>
           ) : runResult.columns ? (
             <>
-              <div className="eyebrow">Output · {runResult.row_count} rows</div>
+              <h3>
+                Output <span className="faint tnum">{runResult.row_count} rows</span>
+              </h3>
               <DataGrid columns={runResult.columns} rows={runResult.rows ?? []} dense maxHeight={200} />
             </>
           ) : (
@@ -401,7 +448,7 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
         {solution !== null && (
           <motion.div className="solution" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring}>
             <div className="solution-head">
-              <span className="eyebrow">One possible solution</span>
+              <h3>One possible solution</h3>
               <button className="btn btn-sm" onClick={() => setSql(solution)}>
                 Use it
               </button>

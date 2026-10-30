@@ -59,7 +59,7 @@ SET NEW.rating = LEAST(GREATEST(NEW.rating, 1), 5);
 
 Typical uses are audit logs, derived columns and validation. Use them sparingly: logic hidden in triggers surprises people.
 
-Everything you create shows up in the schema panel under your database. Remove objects with `DROP VIEW`, `DROP FUNCTION`, `DROP PROCEDURE` or `DROP TRIGGER`.
+Everything you create shows up in the Tables panel under your database. Remove objects with `DROP VIEW`, `DROP FUNCTION`, `DROP PROCEDURE` or `DROP TRIGGER`.
 
 === exercise
 id: view-1

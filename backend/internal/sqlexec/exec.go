@@ -397,8 +397,8 @@ func errorLine(e *SQLError, stmtLine int) int {
 
 var hints = map[uint16]string{
 	1064: "Check the SQL right before the quoted text: a missing comma, a misspelled keyword or an unclosed quote are the usual suspects.",
-	1146: "That table doesn't exist here. Browse the schema panel to see the available tables.",
-	1054: "Check the column name, and the table alias in front of it. The schema panel lists every column.",
+	1146: "That table doesn't exist here. The Tables panel lists every table.",
+	1054: "Check the column name, and the table alias in front of it. The Tables panel lists every column.",
 	1052: "More than one table has a column with that name. Prefix it with a table name or alias, e.g. o.customer_id.",
 	1055: "With ONLY_FULL_GROUP_BY (MySQL's default), every selected column must be listed in GROUP BY or wrapped in an aggregate such as MAX().",
 	1140: "You're mixing aggregates (SUM, COUNT, ...) with plain columns. Add a GROUP BY for the plain columns.",

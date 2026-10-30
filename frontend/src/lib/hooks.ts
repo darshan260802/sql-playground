@@ -13,6 +13,8 @@ export function useMediaQuery(query: string): boolean {
 }
 
 export const useIsMobile = () => useMediaQuery('(max-width: 760px)')
+/** Phones and tablets in portrait: too narrow for two working columns side by side. */
+export const useIsCompact = () => useMediaQuery('(max-width: 1023px)')
 
 /** Calls handler on Escape while active. */
 export function useEscape(active: boolean, handler: () => void) {

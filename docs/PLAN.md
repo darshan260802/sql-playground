@@ -77,15 +77,20 @@ No containers. The first version shipped with Docker Compose; it was replaced be
 
 ## Frontend design
 
-**ClickHouse system:** near-black canvas `#0a0a0a`, surface cards `#1a1a1a` with hairlines, and electric yellow `#faff69` used sparingly: the primary button, stat numbers, the active step, the full-bleed CTA band. Typography is Inter (display at weight 700 with negative tracking) and JetBrains Mono. The light theme keeps yellow for fills only and uses an olive `#5f6300` for yellow-as-text (~6:1 contrast).
+The interface was revamped with the `design-taste-frontend` skill (installed in `.claude/skills/` together with `minimalist-ui`, `high-end-visual-design` and `brandkit`). The playground is an app screen people work in, so it follows the skill's app-screen chapter rather than its landing-page rules.
 
-**Apple motion principles applied:**
-- Critically damped springs (`bounce: 0`) everywhere by default; a little bounce only after a momentum gesture (sheet release) or a success moment.
-- Feedback on pointer-down (`:active` scale 0.97) on every pressable element.
-- Spatial consistency: popovers grow from their trigger (`transform-origin`), sheets enter and leave from the bottom, and dialogs scale in and out along the same path.
-- Direct manipulation: resizable panes track the pointer 1:1 from where they were grabbed, rubber-band past their limits and spring back. The mobile sheet uses momentum projection to decide dismissal.
-- Translucent top bar (material + blur) with content scrolling underneath. Shared-layout transitions for tab, segment and stepper indicators.
-- Accessibility: `prefers-reduced-motion` (springs and slides become instant; the "wrong answer" shake is dropped), `prefers-reduced-transparency` (solid bars), `prefers-contrast: more`. Visible focus rings, keyboard-resizable splitters, ARIA roles on grid, tabs and dialogs.
+**Style:** "data terminal" (dealt by the skill's `draw.mjs --app`, keeping the brand's palette and type): chrome on one ground (`#111`), the working surfaces (editor, results, code) one step darker (`#0a0a0a`), lines instead of shadows, tight radii (8/6/4px), and colour under 3% of the screen. Every selection (tabs, the database switch, the nav rail, exercises) is the same 1px accent line under its label; yellow otherwise appears only on the one primary action per screen (Run, Check, Continue). Figures that stand alone or sit in columns are set in JetBrains Mono so digits stack; SQL never uses ligatures, so `<=` reads as typed.
+
+**Each screen answers one question first:**
+- *Playground:* "What does my query return, and on which database?" The title row names the screen, shows the database switch (your copy, with its storage, or the read-only original) and the Run button. Before the first run, the results area offers example queries and the keyboard shortcuts instead of an empty panel.
+- *Learn:* "Where do I continue, and how far along am I?" A Continue button and the progress at its true ratio come first; lessons are rows with a progress ring, level, minutes and solved count.
+- *Lesson:* "Can I solve this exercise?" The article and the exercise panel sit side by side; below 1024px they take turns behind a Lesson / Exercises switch, so the exercise is one tap away instead of a long scroll.
+
+**Phones** get their own composition: a bottom bar (Playground, Learn, theme, account) replaces the icon rail; the playground shows one region at a time (Query, Results, Tables) with Run in a thumb-height bar and switches to Results after a run; dialogs become draggable bottom sheets.
+
+**Removed in the revamp** (generated-UI tells the skill flags): tracked uppercase labels, a glass top bar, zebra rows, shimmer skeletons, a 56px landing-page headline and stat block on Learn, numbered cards, the full-bleed yellow band, filled pill tabs.
+
+**Checks:** the skill's linter (`lint.mjs --app`: 0 FAIL) and inspector (`inspect.mjs --app` at 1440, 768 and 390px: 0 FAIL on every screen), plus a Playwright run of the main flows on desktop and phone.
 
 ## Possible next steps
 

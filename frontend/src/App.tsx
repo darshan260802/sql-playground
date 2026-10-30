@@ -4,7 +4,7 @@ import { MotionConfig } from 'motion/react'
 import { Toaster } from 'sonner'
 import { AuthProvider } from './state/auth'
 import { useTheme } from './state/stores'
-import { TopNav } from './components/TopNav'
+import { MainNav } from './components/Nav'
 import { AuthDialog } from './components/AuthDialog'
 import { Playground } from './pages/Playground'
 import { Learn } from './pages/Learn'
@@ -14,7 +14,7 @@ import { NotFound, SharedQuery } from './pages/Misc'
 function Shell() {
   return (
     <div className="app">
-      <TopNav />
+      <MainNav />
       <main className="app-main">
         <Outlet />
       </main>
@@ -27,7 +27,7 @@ export default function App() {
   const theme = useTheme((s) => s.theme)
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a0a0a' : '#fafaf7')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#111111' : '#f6f6f5')
   }, [theme])
 
   return (
@@ -50,7 +50,7 @@ export default function App() {
           position="bottom-right"
           toastOptions={{ className: 'toast' }}
           offset={20}
-          mobileOffset={12}
+          mobileOffset={{ bottom: 72, left: 12, right: 12 }}
         />
       </AuthProvider>
     </MotionConfig>

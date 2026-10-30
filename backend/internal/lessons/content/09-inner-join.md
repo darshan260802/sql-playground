@@ -19,7 +19,7 @@ WHERE oi.order_id = 6;
 
 ### How tables relate here
 
-Columns ending in `_id` usually point at another table's primary key (the schema panel marks them as foreign keys):
+Columns ending in `_id` usually point at another table's primary key (the Tables panel marks them with a link icon):
 
 ```
 orders.customer_id      → customers.customer_id

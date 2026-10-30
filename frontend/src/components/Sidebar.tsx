@@ -41,11 +41,12 @@ export function Sidebar({ target, schema, schemaError, onInsert, onPreview, onOp
       <div className="sidebar-top">
         <Segmented
           full
-          label="Sidebar view"
+          ruled
+          label="Panel"
           value={pane}
           onChange={setPane}
           options={[
-            { value: 'schema', label: 'Schema' },
+            { value: 'schema', label: 'Tables' },
             { value: 'saved', label: 'Saved' },
             { value: 'history', label: 'History' },
           ]}
@@ -88,9 +89,10 @@ function SchemaBrowser({ target, schema, error, onInsert, onPreview }: { target:
       </div>
       <div className="schema-db" title="Every table below is in this one database">
         <span className={`db-dot ${target === 'mine' ? 'mine' : ''}`} />
-        <span className="muted">database</span>
-        <span className="mono">{schema?.schema ?? '…'}</span>
-        <span className="muted">{target === 'mine' ? 'your copy' : 'read-only'}</span>
+        <span>
+          {schema ? schema.tables.length : '…'} tables in <span className="mono">{schema?.schema ?? '…'}</span>
+        </span>
+        <span className="faint">{target === 'mine' ? 'your copy' : 'read-only'}</span>
       </div>
       {error && <div className="sidebar-note error">{error}</div>}
       {!schema && !error && (
@@ -102,7 +104,9 @@ function SchemaBrowser({ target, schema, error, onInsert, onPreview }: { target:
       )}
       {groups.map((g) => (
         <div key={g.domain} className="schema-group">
-          <div className="eyebrow schema-domain">{g.domain} tables</div>
+          <h2 className="schema-domain">
+            {g.domain} <span className="num faint">{g.tables.length}</span>
+          </h2>
           {g.tables.map((t) => {
             const isOpen = open[t.name] || (query.length > 1 && !t.name.includes(query))
             return (
@@ -162,7 +166,7 @@ function SchemaBrowser({ target, schema, error, onInsert, onPreview }: { target:
       ))}
       {schema && (schema.routines.length > 0 || schema.triggers.length > 0) && (
         <div className="schema-group">
-          <div className="eyebrow schema-domain">Routines & triggers</div>
+          <h2 className="schema-domain">Routines and triggers</h2>
           {schema.routines.map((r) => (
             <button key={r.name} className="schema-misc" onClick={() => onInsert(r.type === 'PROCEDURE' ? `CALL ${r.name}()` : `${r.name}()`)}>
               <FunctionSquare /> <span>{r.name}</span> <span className="muted">{r.type.toLowerCase()}</span>
@@ -188,10 +192,10 @@ function SignInPrompt({ icon, text }: { icon: React.ReactNode; text: string }) {
     <div className="sidebar-cta">
       {icon}
       <p>{text}</p>
-      <button className="btn btn-primary btn-sm" onClick={() => openAuth('signup')}>
+      <button className="btn btn-block" onClick={() => openAuth('signup')}>
         Create a free account
       </button>
-      <button className="btn btn-ghost btn-sm" onClick={() => openAuth('signin')}>
+      <button className="btn btn-text btn-block" onClick={() => openAuth('signin')}>
         Sign in
       </button>
     </div>
@@ -351,7 +355,7 @@ function HistoryList({ onOpen }: { onOpen: (sql: string, title: string) => void 
         ))}
       </ul>
       {items && items.length > 0 && (
-        <button className="btn btn-ghost btn-sm clear-btn" onClick={clear}>
+        <button className="btn btn-text btn-sm clear-btn" onClick={clear}>
           <Trash2 /> Clear history
         </button>
       )}

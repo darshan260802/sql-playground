@@ -53,8 +53,8 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--syn-name)', fontSize: '13.5px' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'auto' },
-  '.cm-content': { caretColor: 'var(--primary)', padding: '12px 0' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'auto', fontVariantLigatures: 'none' },
+  '.cm-content': { caretColor: 'var(--primary)', padding: '12px 16px 12px 0' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--primary)', borderLeftWidth: '2px' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted-soft)', border: 'none', paddingLeft: '6px' },
   '.cm-lineNumbers .cm-gutterElement': { minWidth: '28px', paddingRight: '10px' },

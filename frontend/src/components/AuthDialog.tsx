@@ -74,6 +74,7 @@ export function AuthDialog() {
     >
       <Segmented
         full
+        ruled
         label="Sign in or create account"
         value={mode}
         onChange={(m) => openAuth(m, authReason)}
@@ -122,7 +123,6 @@ export function AuthDialog() {
             onChange={(e) => setEmail(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, email: true }))}
             aria-invalid={(touched.email && !emailOk) || error?.field === 'email'}
-            placeholder="you@example.com"
             autoFocus={mode === 'signin'}
           />
           {touched.email && !emailOk && <span className="help error">Enter a valid email address.</span>}
@@ -160,7 +160,7 @@ export function AuthDialog() {
         {mode === 'signup' && signupClosed ? (
           <div className="form-error">All accounts on this playground are taken. Ask the admin for a spot.</div>
         ) : (
-          <button className="btn btn-primary btn-lg" type="submit" disabled={!canSubmit || busy}>
+          <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={!canSubmit || busy}>
             {busy && <span className="spinner" />}
             {mode === 'signin' ? 'Sign in' : 'Create account'}
           </button>
