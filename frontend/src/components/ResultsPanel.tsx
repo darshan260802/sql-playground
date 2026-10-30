@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertTriangle, CheckCircle2, CircleAlert, Lightbulb, TableProperties, TriangleAlert } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleAlert, Lightbulb, Play, TriangleAlert } from 'lucide-react'
 import type { StatementResult } from '../lib/api'
 import type { RunState } from '../state/stores'
-import { formatDuration, formatInt, spring, springSnappy } from '../lib/util'
+import { formatDuration, formatInt, modKey, springSnappy } from '../lib/util'
 import { DataGrid } from './DataGrid'
 
 interface Props {
@@ -16,9 +16,10 @@ interface Props {
   maxRows: number
 }
 
-const STARTERS: { title: string; sql: string }[] = [
+const STARTERS: { title: string; what: string; sql: string }[] = [
   {
     title: 'Revenue by month',
+    what: 'JOIN two tables, GROUP BY a formatted date',
     sql: `SELECT DATE_FORMAT(o.order_date, '%Y-%m') AS month,
        ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount)), 2) AS revenue
 FROM orders o
@@ -29,6 +30,7 @@ ORDER BY month;`,
   },
   {
     title: 'Best-selling products',
+    what: 'Three-table JOIN, SUM, top 10 with LIMIT',
     sql: `SELECT p.name, c.name AS category, SUM(oi.quantity) AS units
 FROM order_items oi
 JOIN products p ON p.product_id = oi.product_id
@@ -39,6 +41,7 @@ LIMIT 10;`,
   },
   {
     title: 'Salary by department',
+    what: 'AVG per group, ranked with a window function',
     sql: `SELECT d.name AS department,
        COUNT(*) AS people,
        ROUND(AVG(s.salary)) AS avg_salary,
@@ -51,6 +54,7 @@ GROUP BY d.name;`,
   },
   {
     title: 'Stock with 20-day average',
+    what: 'A moving average with ROWS BETWEEN',
     sql: `SELECT s.ticker, p.trade_date, p.close,
        ROUND(AVG(p.close) OVER (ORDER BY p.trade_date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW), 2) AS ma_20
 FROM stock_prices p
@@ -85,20 +89,53 @@ export function ResultsPanel({ run, onSelect, onJumpToLine, onSignup, onUseMine,
   if (!run || (!resp && !run.running && !run.error)) {
     return (
       <div className="results-empty">
-        <div className="results-empty-inner">
-          <TableProperties className="results-empty-icon" />
-          <h3>Run a query to see results</h3>
-          <p>
-            Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd>, or try one of these:
+        <div className="results-empty-main">
+          <h2>Results appear here</h2>
+          <p className="muted">
+            Run the query above with <kbd>{modKey}</kbd> + <kbd>Enter</kbd>, select part of it to run only that, or start from an example:
           </p>
-          <div className="starter-grid">
+          <ul className="starters">
             {STARTERS.map((s) => (
-              <button key={s.title} className="starter" onClick={() => onStarter(s.sql, s.title)}>
-                {s.title}
-              </button>
+              <li key={s.title}>
+                <button className="starter" onClick={() => onStarter(s.sql, s.title)}>
+                  <span className="starter-title">{s.title}</span>
+                  <span className="starter-what">{s.what}</span>
+                  <span className="starter-run">
+                    <Play /> Run
+                  </span>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
+        <aside className="results-empty-side">
+          <h2>Good to know</h2>
+          <dl className="keys">
+            <div>
+              <dt>Run the query</dt>
+              <dd>
+                <kbd>{modKey}</kbd> <kbd>Enter</kbd>
+              </dd>
+            </div>
+            <div>
+              <dt>Run only the selection</dt>
+              <dd>Select, then <kbd>{modKey}</kbd> <kbd>Enter</kbd></dd>
+            </div>
+            <div>
+              <dt>Save the query</dt>
+              <dd>
+                <kbd>{modKey}</kbd> <kbd>S</kbd>
+              </dd>
+            </div>
+            <div>
+              <dt>Several statements</dt>
+              <dd>End each with ;</dd>
+            </div>
+          </dl>
+          <p className="muted small">
+            Results show up to {formatInt(maxRows)} rows with the true row count. Double-click a cell to copy its value.
+          </p>
+        </aside>
       </div>
     )
   }
@@ -106,20 +143,19 @@ export function ResultsPanel({ run, onSelect, onJumpToLine, onSignup, onUseMine,
   return (
     <div className="results">
       <div className="results-bar">
-        <div className="results-tabs" role="tablist" aria-label="Statement results">
+        <div className="tabs results-tabs" role="tablist" aria-label="Statement results">
           {results.length > 1 &&
             results.map((r, i) => (
-              <button key={i} role="tab" aria-selected={i === active} className="results-tab" onClick={() => onSelect(i)}>
-                {i === active && <motion.span layoutId="res-tab" className="results-tab-bg" transition={springSnappy} />}
+              <button key={i} role="tab" aria-selected={i === active} onClick={() => onSelect(i)} title={r.sql.slice(0, 200)}>
                 <span className={`dot ${r.error ? 'err' : 'ok'}`} />
-                <span>
-                  {i + 1} · {verb(r.sql)}
-                </span>
+                <span className="mono">{verb(r.sql)}</span>
+                <span className="count">{i + 1}</span>
+                {i === active && <motion.span layoutId="res-line" className="tab-line" transition={springSnappy} />}
               </button>
             ))}
-          {results.length <= 1 && current && <span className="results-title">{verb(current.sql)}</span>}
+          {results.length <= 1 && current && <span className="results-title mono">{verb(current.sql)}</span>}
         </div>
-        <div className="results-meta">
+        <div className="results-meta num">
           {run.running ? (
             <span className="running">
               <span className="spinner" /> Running <Elapsed />
@@ -147,17 +183,17 @@ export function ResultsPanel({ run, onSelect, onJumpToLine, onSignup, onUseMine,
           <motion.div
             key={`${resp?.duration_ms ?? 'x'}-${active}-${run.error ?? ''}`}
             className="results-content"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ ...spring, duration: 0.25 }}
+            transition={{ duration: 0.12 }}
           >
             {run.error && !resp ? (
               <div className="result-card error">
                 <CircleAlert />
                 <div>
                   <div className="result-card-title">{run.error}</div>
-                  {run.errorCode === 'db_not_ready' && <p>Switch the target to “Original data” while your copy is prepared.</p>}
+                  {run.errorCode === 'db_not_ready' && <p>Switch to “Original” while your copy is prepared.</p>}
                 </div>
               </div>
             ) : current ? (
@@ -179,7 +215,7 @@ function ResultView({ r, maxRows, onJumpToLine, onSignup, onUseMine }: { r: Stat
           <CircleAlert />
           <div className="result-card-main">
             <div className="result-card-title">
-              {e.code ? <span className="badge badge-error">Error {e.code}</span> : null}
+              {e.code ? <span className="pill pill-negative num">Error {e.code}</span> : null}
               <span>{e.message}</span>
             </div>
             {e.hint && (
@@ -194,13 +230,13 @@ function ResultView({ r, maxRows, onJumpToLine, onSignup, onUseMine }: { r: Stat
                 </button>
               ) : null}
               {e.reason === 'read_only_anon' && (
-                <button className="btn btn-sm btn-primary" onClick={onSignup}>
+                <button className="btn btn-sm" onClick={onSignup}>
                   Create a free account
                 </button>
               )}
               {e.reason === 'read_only_core' && onUseMine && (
-                <button className="btn btn-sm btn-primary" onClick={onUseMine}>
-                  Switch to My database
+                <button className="btn btn-sm" onClick={onUseMine}>
+                  Switch to your copy
                 </button>
               )}
             </div>
@@ -229,8 +265,8 @@ function ResultView({ r, maxRows, onJumpToLine, onSignup, onUseMine }: { r: Stat
         <CheckCircle2 />
         <div className="result-card-main">
           <div className="result-card-title">{r.message ?? 'Query OK'}</div>
-          {r.last_insert_id ? <p className="muted">Last insert id: {r.last_insert_id}</p> : null}
-          <p className="muted mono">{formatDuration(r.duration_ms)}</p>
+          {r.last_insert_id ? <p className="muted">Last insert id <span className="num">{r.last_insert_id}</span></p> : null}
+          <p className="muted num">{formatDuration(r.duration_ms)}</p>
         </div>
       </div>
       <Warnings w={r.warnings} />

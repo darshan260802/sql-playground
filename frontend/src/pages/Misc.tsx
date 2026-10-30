@@ -31,8 +31,9 @@ export function SharedQuery() {
   if (state === 'done') return <Navigate to="/" replace />
   if (state === 'missing') {
     return (
-      <div className="lesson-missing">
-        <h2>{message || 'This shared query doesn’t exist.'}</h2>
+      <div className="page-empty">
+        <h1>{message || 'This shared query doesn’t exist.'}</h1>
+        <p className="muted">The link may be mistyped, or the query was shared from another playground.</p>
         <Link to="/" className="btn">
           <ArrowLeft /> Back to the playground
         </Link>
@@ -40,7 +41,8 @@ export function SharedQuery() {
     )
   }
   return (
-    <div className="lesson-missing">
+    <div className="page-empty" aria-busy="true">
+      <h1>Opening the shared query…</h1>
       <span className="spinner" />
     </div>
   )
@@ -48,12 +50,23 @@ export function SharedQuery() {
 
 export function NotFound() {
   return (
-    <div className="lesson-missing">
-      <span className="eyebrow">404</span>
-      <h2>There’s nothing at this address.</h2>
-      <Link to="/" className="btn btn-primary">
-        Go to the playground
-      </Link>
+    <div className="page-empty">
+      <h1>There’s nothing at this address</h1>
+      <p className="muted">Error 404. The link may be mistyped or out of date. These are the two places to go:</p>
+      <ul className="page-empty-links">
+        <li>
+          <Link to="/">
+            <span className="link-title">Playground</span>
+            <span className="link-what">Run any SQL on 24 tables and about 1.7 million rows</span>
+          </Link>
+        </li>
+        <li>
+          <Link to="/learn">
+            <span className="link-title">Learn</span>
+            <span className="link-what">30 lessons with exercises checked against the real database</span>
+          </Link>
+        </li>
+      </ul>
     </div>
   )
 }

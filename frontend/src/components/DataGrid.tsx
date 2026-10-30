@@ -77,7 +77,7 @@ export function DataGrid({ columns, rows, dense, maxHeight }: Props) {
             return (
               <div
                 key={vr.key}
-                className={`grid-row ${vr.index % 2 ? 'odd' : ''}`}
+                className="grid-row"
                 role="row"
                 style={{ gridTemplateColumns: template, height: rowH, transform: `translateY(${vr.start}px)` }}
               >

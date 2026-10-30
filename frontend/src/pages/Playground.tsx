@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue } from 'motion/react'
 import { toast } from 'sonner'
-import { Bookmark, Database, Lock, PanelLeft, Play, Plus, Share2, Square, X } from 'lucide-react'
+import { Bookmark, Lock, MoreHorizontal, PanelLeft, Play, Plus, Share2, Square, X } from 'lucide-react'
 import type { SQLNamespace } from '@codemirror/lang-sql'
 import { api, ApiError, newRunId, type QueryResponse, type SchemaInfo, type Target } from '../lib/api'
 import { useAuth, useEffectiveTarget } from '../state/auth'
 import { addLocalHistory, useTabs, useUI } from '../state/stores'
-import { copyText, modKey, spring, storage } from '../lib/util'
+import { copyText, formatBytes, formatInt, modKey, spring, springSnappy, storage } from '../lib/util'
 import { useIsMobile } from '../lib/hooks'
 import { SqlEditor, type EditorHandle } from '../components/SqlEditor'
 import { ResultsPanel } from '../components/ResultsPanel'
 import { Sidebar } from '../components/Sidebar'
 import { Splitter } from '../components/Splitter'
 import { Segmented } from '../components/Segmented'
-import { Dialog, Popover } from '../components/Overlay'
+import { Popover } from '../components/Overlay'
 import { DatabaseBanner } from '../components/DatabaseBanner'
 
 const WRITE_RE = /^\s*(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME|CALL|LOAD)\b/i
@@ -177,13 +177,23 @@ export function Playground() {
   }, [save, runActive])
 
   // ---------------------------------------------------------------- layout
-  const sidebarW = useMotionValue(storage.get('sqlpg.sidebarW', 288))
+  const sidebarW = useMotionValue(storage.get('sqlpg.sidebarW', 280))
   const editorH = useMotionValue(storage.get('sqlpg.editorH', 300))
   const mainRef = useRef<HTMLDivElement>(null)
-  const [sidebarSheet, setSidebarSheet] = useState(false)
+  // The tables panel remembers its state on wide screens; on narrower ones it starts closed.
+  const wide = window.innerWidth >= 1100
+  const [explorerOpen, setExplorerOpen] = useState(() => wide && storage.get('sqlpg.explorer', true))
+  const [pane, setPane] = useState<'query' | 'results' | 'tables'>('query')
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreBtn = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
+    if (window.innerWidth >= 1100) storage.set('sqlpg.explorer', explorerOpen)
+  }, [explorerOpen])
+
+  useEffect(() => {
+    if (mobile) return
     const fit = () => {
       const h = mainRef.current?.clientHeight ?? 600
       const max = Math.max(160, h - 170)
@@ -192,182 +202,293 @@ export function Playground() {
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [editorH])
+  }, [editorH, mobile])
+
+  // On a phone one region shows at a time: a run shows its results.
+  const runAndShow = (fn: () => void) => {
+    fn()
+    if (mobile) setPane('results')
+  }
 
   const insert = (text: string) => {
     editor.current?.insert(text)
-    if (mobile) setSidebarSheet(false)
+    if (mobile) setPane('query')
   }
   const preview = (table: string) => {
     const sql = `SELECT *\nFROM ${table}\nLIMIT 100;`
     const id = openOrFocus(sql, table)
-    execute(id, sql)
-    if (mobile) setSidebarSheet(false)
+    runAndShow(() => execute(id, sql))
   }
   const openSql = (sql: string, title: string, savedId?: number) => {
     openOrFocus(sql, title, savedId)
-    if (mobile) setSidebarSheet(false)
+    if (mobile) setPane('query')
   }
 
   const current = run?.response?.results[run.active]
   const errorLine = current?.error?.line ? current.error.line + (run?.lineOffset ?? 0) : null
   const inTx = txOpen[target]
+  const resultCount = run?.response ? (current?.columns ? formatInt(current.row_count) : run.response.results.some((r) => r.error) ? 'error' : 'OK') : undefined
 
   const sidebar = (
     <Sidebar target={target} schema={schema} schemaError={schemaError} onInsert={insert} onPreview={preview} onOpen={openSql} />
   )
 
+  const runButton = run?.running ? (
+    <button className="btn btn-run running" onClick={cancel}>
+      <Square className="fill" /> Cancel
+    </button>
+  ) : (
+    <button className="btn btn-primary btn-run" onClick={() => runAndShow(runActive)} title={`Run (${modKey} + Enter)`}>
+      <Play className="fill" /> Run {!mobile && <kbd>{modKey}↵</kbd>}
+    </button>
+  )
+
+  const txPill = (
+    <AnimatePresence>
+      {inTx && (
+        <motion.div className="tx-pill" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={spring}>
+          <span className="tx-dot" /> Transaction open
+          <button onClick={() => quick('COMMIT')}>Commit</button>
+          <button onClick={() => quick('ROLLBACK')}>Rollback</button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+
+  const queryTabs = (
+    <div className="qtabs">
+      {!mobile && (
+        <button className={`icon-btn sm ${explorerOpen ? 'on' : ''}`} onClick={() => setExplorerOpen((o) => !o)} aria-label={explorerOpen ? 'Hide tables' : 'Show tables'} aria-pressed={explorerOpen} title={explorerOpen ? 'Hide tables' : 'Show tables'}>
+          <PanelLeft />
+        </button>
+      )}
+      <div className="qtabs-scroll" role="tablist" aria-label="Query tabs">
+        {tabs.map((t) => (
+          <div key={t.id} className={`qtab ${t.id === tab.id ? 'active' : ''}`} role="tab" aria-selected={t.id === tab.id}>
+            {renaming === t.id ? (
+              <input
+                className="qtab-input"
+                defaultValue={t.title}
+                autoFocus
+                onFocus={(e) => e.currentTarget.select()}
+                onBlur={(e) => {
+                  if (e.target.value.trim()) updateTab(t.id, { title: e.target.value.trim().slice(0, 60) })
+                  setRenaming(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Escape') setRenaming(null)
+                }}
+                aria-label="Tab name"
+              />
+            ) : (
+              <button className="qtab-label" onClick={() => setActive(t.id)} onDoubleClick={() => setRenaming(t.id)} title="Double-click to rename">
+                {runs[t.id]?.running && <span className="spinner tiny" />}
+                {t.savedId && <Bookmark className="qtab-saved" />}
+                <span>{t.title}</span>
+              </button>
+            )}
+            <button className="qtab-close" aria-label={`Close ${t.title}`} onClick={() => closeTab(t.id)}>
+              <X />
+            </button>
+            {t.id === tab.id && <motion.span layoutId="qtab-line" className="tab-line" transition={springSnappy} />}
+          </div>
+        ))}
+      </div>
+      <button className="icon-btn sm" onClick={() => newTab()} aria-label="New query tab" title="New tab">
+        <Plus />
+      </button>
+    </div>
+  )
+
+  const editorEl = (
+    <SqlEditor
+      docKey={tab.id}
+      value={tab.sql}
+      onChange={(v) => updateSql(tab.id, v)}
+      onRun={() => runAndShow(runActive)}
+      onSave={save}
+      schema={namespace}
+      errorLine={errorLine}
+      handleRef={editor}
+      placeholder="Write SQL here, then press Ctrl/⌘ + Enter"
+    />
+  )
+
+  const results = (
+    <ResultsPanel
+      run={run}
+      maxRows={config?.max_rows ?? 2000}
+      onSelect={(i) => setRun(tab.id, { active: i })}
+      onJumpToLine={(l) => {
+        if (mobile) setPane('query')
+        editor.current?.goToLine(l + (run?.lineOffset ?? 0))
+      }}
+      onSignup={() => openAuth('signup', 'Create a free account to get your own copy of the database. Every change stays private to you.')}
+      onUseMine={user?.db_status === 'ready' ? () => setTarget('mine') : undefined}
+      onStarter={(sql, title) => {
+        const id = openOrFocus(sql, title)
+        runAndShow(() => execute(id, sql))
+      }}
+    />
+  )
+
+  const scope = (
+    <ScopeSwitch
+      target={target}
+      onChange={setTarget}
+      compact={mobile}
+      onSignup={() => openAuth('signup', 'Create a free account to INSERT, UPDATE, DELETE and CREATE on your own copy of the data.')}
+    />
+  )
+
+  const saveForm = (
+    <Popover open={saveOpen} onClose={() => setSaveOpen(false)} anchor={mobile ? moreBtn : saveBtn} width={300}>
+      <form className="save-form" onSubmit={confirmSave}>
+        <label htmlFor="save-title">Save query as</label>
+        <input id="save-title" className="input input-sm" autoFocus value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="e.g. Monthly revenue" maxLength={120} />
+        <div className="save-actions">
+          <button type="button" className="btn btn-text btn-sm" onClick={() => setSaveOpen(false)}>
+            Cancel
+          </button>
+          <button className="btn btn-sm" disabled={!saveTitle.trim()}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Popover>
+  )
+
+  if (mobile) {
+    return (
+      <div className="playground phone">
+        <header className="title-row">
+          <h1>Playground</h1>
+          {scope}
+          <div className="spacer" />
+          <button ref={moreBtn} className="icon-btn" onClick={() => setMoreOpen(true)} aria-label="Save or share this query">
+            <MoreHorizontal />
+          </button>
+        </header>
+        <DatabaseBanner />
+        <Segmented
+          ruled
+          full
+          className="pane-switch"
+          label="Show"
+          value={pane}
+          onChange={setPane}
+          options={[
+            { value: 'query', label: 'Query' },
+            { value: 'results', label: <>Results {resultCount && <span className="count">{resultCount}</span>}</> },
+            { value: 'tables', label: 'Tables' },
+          ]}
+        />
+        <div className="phone-pane">
+          {pane === 'query' && (
+            <div className="phone-query">
+              {queryTabs}
+              <div className="editor-pane">{editorEl}</div>
+            </div>
+          )}
+          {pane === 'results' && <div className="results-pane">{results}</div>}
+          {pane === 'tables' && sidebar}
+        </div>
+        <div className="run-bar">
+          {txPill}
+          {runButton}
+        </div>
+        <Popover open={moreOpen} onClose={() => setMoreOpen(false)} anchor={moreBtn} width={220}>
+          <div className="menu-list">
+            <button className="menu-item" onClick={() => { setMoreOpen(false); save() }}>
+              <Bookmark /> Save query
+            </button>
+            <button className="menu-item" onClick={() => { setMoreOpen(false); share() }}>
+              <Share2 /> Copy share link
+            </button>
+            <button className="menu-item" onClick={() => { setMoreOpen(false); newTab(); setPane('query') }}>
+              <Plus /> New query tab
+            </button>
+          </div>
+        </Popover>
+        {saveForm}
+      </div>
+    )
+  }
+
   return (
     <div className="playground">
-      {!mobile && (
-        <>
-          <motion.div className="playground-side" style={{ width: sidebarW }}>
-            {sidebar}
+      <header className="title-row">
+        <h1>Playground</h1>
+        {scope}
+        <div className="spacer" />
+        {txPill}
+        <button ref={saveBtn} className="btn btn-text" onClick={save} title={`Save (${modKey} + S)`} aria-label="Save">
+          <Bookmark /> <span className="label">Save</span>
+        </button>
+        <button className="btn btn-text" onClick={share} title="Copy a share link" aria-label="Share">
+          <Share2 /> <span className="label">Share</span>
+        </button>
+        {runButton}
+      </header>
+      <DatabaseBanner />
+      <div className="workbench">
+        {explorerOpen && (
+          <>
+            <motion.div className="playground-side" style={{ width: sidebarW }}>
+              {sidebar}
+            </motion.div>
+            <Splitter axis="x" size={sidebarW} min={220} max={() => Math.min(520, window.innerWidth * 0.4)} storageKey="sqlpg.sidebarW" label="Resize tables panel" />
+          </>
+        )}
+        <div className="playground-main" ref={mainRef}>
+          {queryTabs}
+          <motion.div className="editor-pane" style={{ height: editorH }}>
+            {editorEl}
           </motion.div>
-          <Splitter axis="x" size={sidebarW} min={220} max={() => Math.min(520, window.innerWidth * 0.45)} storageKey="sqlpg.sidebarW" label="Resize sidebar" />
-        </>
-      )}
-      <div className="playground-main" ref={mainRef}>
-        <DatabaseBanner />
-        <div className="tabs-bar">
-          {mobile && (
-            <button className="icon-btn" onClick={() => setSidebarSheet(true)} aria-label="Show tables">
-              <PanelLeft />
-            </button>
-          )}
-          <div className="tabs-scroll" role="tablist" aria-label="Query tabs">
-            {tabs.map((t) => (
-              <div key={t.id} className={`qtab ${t.id === tab.id ? 'active' : ''}`} role="tab" aria-selected={t.id === tab.id}>
-                {t.id === tab.id && <motion.span layoutId="qtab-bg" className="qtab-bg" transition={{ ...spring, duration: 0.25 }} />}
-                {renaming === t.id ? (
-                  <input
-                    className="qtab-input"
-                    defaultValue={t.title}
-                    autoFocus
-                    onFocus={(e) => e.currentTarget.select()}
-                    onBlur={(e) => {
-                      if (e.target.value.trim()) updateTab(t.id, { title: e.target.value.trim().slice(0, 60) })
-                      setRenaming(null)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.currentTarget.blur()
-                      if (e.key === 'Escape') setRenaming(null)
-                    }}
-                    aria-label="Tab name"
-                  />
-                ) : (
-                  <button className="qtab-label" onClick={() => setActive(t.id)} onDoubleClick={() => setRenaming(t.id)} title="Double-click to rename">
-                    {runs[t.id]?.running && <span className="spinner tiny" />}
-                    {t.savedId && <Bookmark className="qtab-saved" />}
-                    <span>{t.title}</span>
-                  </button>
-                )}
-                <button className="qtab-close" aria-label={`Close ${t.title}`} onClick={() => closeTab(t.id)}>
-                  <X />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button className="icon-btn" onClick={() => newTab()} aria-label="New query tab" title="New tab">
-            <Plus />
-          </button>
-        </div>
-
-        <div className="toolbar">
-          {run?.running ? (
-            <button className="btn btn-run running" onClick={cancel}>
-              <Square className="fill" /> Cancel
-            </button>
-          ) : (
-            <button className="btn btn-primary btn-run" onClick={runActive} title={`Run (${modKey} + Enter)`}>
-              <Play className="fill" /> Run <kbd className="hide-sm">{modKey}↵</kbd>
-            </button>
-          )}
-          {user ? (
-            <Segmented
-              label="Database to query"
-              value={target}
-              onChange={(v) => setTarget(v)}
-              options={[
-                { value: 'mine', label: 'My database', disabled: user.db_status !== 'ready', title: 'Your private copy: read and write' },
-                { value: 'core', label: 'Original', title: 'The pristine data: read-only' },
-              ]}
-            />
-          ) : (
-            <button className="readonly-chip" onClick={() => openAuth('signup', 'Create a free account to INSERT, UPDATE, DELETE and CREATE on your own copy of the data.')}>
-              <Lock /> <span className="hide-sm">Original data ·&nbsp;</span>read-only
-            </button>
-          )}
-          <div className="toolbar-spacer" />
-          <AnimatePresence>
-            {inTx && (
-              <motion.div className="tx-pill" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={spring}>
-                <span className="tx-dot" /> Transaction open
-                <button onClick={() => quick('COMMIT')}>Commit</button>
-                <button onClick={() => quick('ROLLBACK')}>Rollback</button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button ref={saveBtn} className="btn btn-sm btn-ghost" onClick={save} title={`Save (${modKey} + S)`}>
-            <Bookmark /> <span className="hide-sm">Save</span>
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={share} title="Copy a share link">
-            <Share2 /> <span className="hide-sm">Share</span>
-          </button>
-        </div>
-
-        <motion.div className="editor-pane" style={{ height: editorH }}>
-          <SqlEditor
-            docKey={tab.id}
-            value={tab.sql}
-            onChange={(v) => updateSql(tab.id, v)}
-            onRun={runActive}
-            onSave={save}
-            schema={namespace}
-            errorLine={errorLine}
-            handleRef={editor}
-            placeholder="Write SQL here, then press Ctrl/⌘ + Enter"
-          />
-        </motion.div>
-        <Splitter axis="y" size={editorH} min={110} max={() => (mainRef.current?.clientHeight ?? 700) - 170} storageKey="sqlpg.editorH" label="Resize editor" />
-        <div className="results-pane">
-          <ResultsPanel
-            run={run}
-            maxRows={config?.max_rows ?? 2000}
-            onSelect={(i) => setRun(tab.id, { active: i })}
-            onJumpToLine={(l) => editor.current?.goToLine(l + (run?.lineOffset ?? 0))}
-            onSignup={() => openAuth('signup', 'Create a free account to get your own copy of the database. Every change stays private to you.')}
-            onUseMine={user?.db_status === 'ready' ? () => setTarget('mine') : undefined}
-            onStarter={(sql, title) => {
-              const id = openOrFocus(sql, title)
-              execute(id, sql)
-            }}
-          />
+          <Splitter axis="y" size={editorH} min={110} max={() => (mainRef.current?.clientHeight ?? 700) - 170} storageKey="sqlpg.editorH" label="Resize editor" />
+          <div className="results-pane">{results}</div>
         </div>
       </div>
+      {saveForm}
+    </div>
+  )
+}
 
-      <Popover open={saveOpen} onClose={() => setSaveOpen(false)} anchor={saveBtn} width={300}>
-        <form className="save-form" onSubmit={confirmSave}>
-          <label className="eyebrow" htmlFor="save-title">
-            Save query as
-          </label>
-          <input id="save-title" className="input input-sm" autoFocus value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="e.g. Monthly revenue" maxLength={120} />
-          <div className="save-actions">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveOpen(false)}>
-              Cancel
-            </button>
-            <button className="btn btn-primary btn-sm" disabled={!saveTitle.trim()}>
-              Save
-            </button>
-          </div>
-        </form>
-      </Popover>
-
-      {mobile && (
-        <Dialog open={sidebarSheet} onClose={() => setSidebarSheet(false)} title={<span className="sheet-title"><Database size={16} /> Explorer</span>}>
-          <div className="sheet-sidebar">{sidebar}</div>
-        </Dialog>
-      )}
+/**
+ * Which database a run goes to: the learner's own copy (read and write) or the original data
+ * (read-only). The question learners most often get wrong, so it sits next to the title.
+ */
+function ScopeSwitch({ target, onChange, onSignup, compact }: { target: Target; onChange: (t: Target) => void; onSignup: () => void; compact?: boolean }) {
+  const { user, database } = useAuth()
+  if (!user) {
+    return (
+      <div className="scope">
+        <span className="scope-anon">
+          <Lock /> {compact ? 'Read-only' : <><span className="wide-only">Original data </span><span className="mono faint">core</span> · read-only</>}
+        </span>
+        {!compact && (
+          <button className="btn btn-sm" onClick={onSignup}>
+            Get a writable copy
+          </button>
+        )}
+      </div>
+    )
+  }
+  const ready = user.db_status === 'ready'
+  const usage = database && database.quota_bytes > 0 ? `${formatBytes(database.usage_bytes)} of ${formatBytes(database.quota_bytes)}` : ''
+  return (
+    <div className="scope">
+      <Segmented
+        label="Database to run on"
+        value={target}
+        onChange={onChange}
+        options={[
+          { value: 'mine', label: compact ? 'Mine' : <>Your copy <span className="mono faint">{user.db_status === 'ready' ? database?.schema ?? '' : '…'}</span></>, disabled: !ready, title: 'Your private copy: read and write' },
+          { value: 'core', label: compact ? 'Original' : <>Original <span className="mono faint">core</span></>, title: 'The original data: read-only' },
+        ]}
+      />
+      {!compact && <span className="scope-note num">{target === 'mine' ? (ready ? usage : 'preparing…') : 'read-only'}</span>}
     </div>
   )
 }

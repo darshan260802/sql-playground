@@ -94,7 +94,7 @@ export interface RunState {
 }
 
 const WELCOME_SQL = `-- Welcome! Press Ctrl/⌘ + Enter to run.
--- ~1.7M rows of e-commerce, HR and finance data. Browse tables on the left.
+-- ~1.7M rows of e-commerce, HR and finance data. See them under Tables.
 SELECT c.country,
        COUNT(DISTINCT o.customer_id) AS customers,
        ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount))) AS revenue

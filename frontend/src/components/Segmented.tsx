@@ -13,26 +13,21 @@ interface Props<T extends string> {
   value: T
   options: Option<T>[]
   onChange: (v: T) => void
-  full?: boolean
   label: string
+  full?: boolean
+  ruled?: boolean
+  className?: string
 }
 
-/** A segmented control whose selection thumb slides between options. */
-export function Segmented<T extends string>({ value, options, onChange, full, label }: Props<T>) {
+/** A choice between a few views or targets: the selected one carries a 1px accent line that slides between labels. */
+export function Segmented<T extends string>({ value, options, onChange, label, full, ruled, className }: Props<T>) {
   const id = useId()
   return (
-    <div className={`segmented ${full ? 'full' : ''}`} role="group" aria-label={label}>
+    <div className={`tabs ${full ? 'full' : ''} ${ruled ? 'ruled' : ''} ${className ?? ''}`} role="group" aria-label={label}>
       {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={o.value === value}
-          title={o.title}
-          disabled={o.disabled}
-          onClick={() => onChange(o.value)}
-        >
-          {o.value === value && <motion.span layoutId={`seg-${id}`} className="thumb" transition={springSnappy} />}
+        <button key={o.value} type="button" aria-pressed={o.value === value} title={o.title} disabled={o.disabled} onClick={() => onChange(o.value)}>
           {o.label}
+          {o.value === value && <motion.span layoutId={`line-${id}`} className="tab-line" transition={springSnappy} />}
         </button>
       ))}
     </div>

@@ -138,7 +138,7 @@ export function Confirm({ open, title, body, confirmLabel, danger, busy, onConfi
     <Dialog open={open} onClose={onClose} title={title} width={400}>
       <div className="confirm-body">{body}</div>
       <div className="dialog-actions">
-        <button className="btn btn-ghost" onClick={onClose}>
+        <button className="btn btn-text" onClick={onClose}>
           Cancel
         </button>
         <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm} disabled={busy} autoFocus>
@@ -157,15 +157,17 @@ interface PopoverProps {
   onClose: () => void
   anchor: RefObject<HTMLElement | null>
   align?: 'start' | 'end'
+  /** below the anchor (default), or beside it with the bottoms aligned (for the nav rail) */
+  placement?: 'below' | 'right-end'
   width?: number
   children: ReactNode
   className?: string
 }
 
 /** A non-modal panel that grows out of the element that opened it. */
-export function Popover({ open, onClose, anchor, align = 'end', width = 260, children, className }: PopoverProps) {
+export function Popover({ open, onClose, anchor, align = 'end', placement = 'below', width = 260, children, className }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null)
   useEscape(open, onClose)
 
   useLayoutEffect(() => {
@@ -173,6 +175,10 @@ export function Popover({ open, onClose, anchor, align = 'end', width = 260, chi
     const place = () => {
       const r = anchor.current!.getBoundingClientRect()
       const w = Math.min(width, window.innerWidth - 16)
+      if (placement === 'right-end') {
+        setPos({ bottom: Math.max(8, window.innerHeight - r.bottom), left: r.right + 10 })
+        return
+      }
       let left = align === 'end' ? r.right - w : r.left
       left = Math.max(8, Math.min(left, window.innerWidth - w - 8))
       setPos({ top: r.bottom + 6, left })
@@ -180,7 +186,7 @@ export function Popover({ open, onClose, anchor, align = 'end', width = 260, chi
     place()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [open, anchor, align, width])
+  }, [open, anchor, align, placement, width])
 
   useEffect(() => {
     if (!open) return
@@ -199,7 +205,13 @@ export function Popover({ open, onClose, anchor, align = 'end', width = 260, chi
         <motion.div
           ref={ref}
           className={`popover ${className ?? ''}`}
-          style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16), transformOrigin: align === 'end' ? 'top right' : 'top left' }}
+          style={{
+            top: pos.top,
+            bottom: pos.bottom,
+            left: pos.left,
+            width: Math.min(width, window.innerWidth - 16),
+            transformOrigin: placement === 'right-end' ? 'bottom left' : align === 'end' ? 'top right' : 'top left',
+          }}
           initial={{ opacity: 0, scale: 0.95, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -4 }}

@@ -10,9 +10,17 @@ It's built for a small group (up to 20 accounts) on a single VPS. Behaviour matc
 
 ![Playground](docs/screenshots/playground-dark.png)
 
-| Lessons with instant feedback | Light theme |
+| Lessons with instant feedback | A course you can pick up where you left off |
 |---|---|
-| ![Lesson](docs/screenshots/lesson.png) | ![Light](docs/screenshots/playground-light.png) |
+| ![Lesson](docs/screenshots/lesson.png) | ![Learn](docs/screenshots/learn.png) |
+
+| Transactions across runs | Light theme |
+|---|---|
+| ![Transaction](docs/screenshots/transaction.png) | ![Light](docs/screenshots/playground-light.png) |
+
+On phones every screen has its own layout: one region at a time (query, results or tables), Run within thumb reach, and a bottom bar instead of the side rail.
+
+![Phone](docs/screenshots/mobile.png)
 
 ## Features
 
@@ -34,8 +42,10 @@ It's built for a small group (up to 20 accounts) on a single VPS. Behaviour matc
 - Expected-output preview, hints, solutions, and progress tracking (in the browser when signed out, carried over when you sign up)
 
 **Design**
-- The ClickHouse design system (near-black canvas, electric-yellow accent, Inter + JetBrains Mono), with dark as the default and a light theme
-- Apple-style motion: critically damped springs, press feedback on pointer-down, popovers that grow from their trigger, a draggable bottom sheet on phones, rubber-banded resizable panes. Respects reduced motion, reduced transparency and increased contrast.
+- ClickHouse's brand (near-black, electric yellow, Inter + JetBrains Mono) applied as a working tool: one title per screen, the database a run goes to always in view, yellow kept for the one primary action and a 1px line under whatever is selected. Dark by default, with a light theme.
+- Laid out for desktop, tablet and phone separately: an icon rail beside the screen on wide screens, a bottom bar and one region at a time on phones; lessons switch between reading and exercises below 1024px.
+- Motion is feedback only (presses, menus, the selection line moving), with critically damped springs, a draggable bottom sheet on phones and resizable panes. Respects reduced motion and increased contrast.
+- Built with the [design-taste-frontend](https://github.com/Leonxlnx/taste-skill) skill (its app-screen rules and inspector); the design skills used are in `.claude/skills/`.
 
 ## The dataset
 
