@@ -12,3 +12,6 @@ deploy/config.env
 .DS_Store
 .idea/
 .vscode/
+
+# design skill working files (screenshots, reports)
+.taste-skill/
