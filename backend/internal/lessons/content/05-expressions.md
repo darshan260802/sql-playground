@@ -17,6 +17,23 @@ FROM products;
 
 `+ - * /` work as you'd expect. `/` always gives a decimal result, `DIV` gives an integer result and `%` (or `MOD`) gives the remainder. Dividing by zero returns `NULL` with a warning instead of failing.
 
+### Operators at a glance
+
+| Kind | Operators |
+|---|---|
+| Arithmetic | `+` `-` `*` `/` `DIV` (integer division) `%` or `MOD` (remainder) |
+| Comparison | `=` `<>` `!=` `<` `<=` `>` `>=`, and `<=>` (equal, treating two NULLs as equal) |
+| Logical | `AND` `OR` `NOT` `XOR`, plus `IN`, `BETWEEN`, `LIKE`, `EXISTS`, `ANY`, `ALL` |
+| Bitwise | `&` (and) `\|` (or) `^` (xor) `~` (not) `<<` `>>` (shifts), on integers |
+
+```sql
+SELECT 17 DIV 5 AS whole,   -- 3
+       17 % 5   AS rest,    -- 2
+       6 & 3    AS bits;    -- 2 (binary 110 AND 011 = 010)
+```
+
+`%` is handy for sampling and alternating: `WHERE order_id % 2 = 0` keeps even ids. SQL Server's compound operators like `+=` don't exist in MySQL; write `SET x = x + 1`.
+
 ### Useful functions
 
 | Function | Example | Result |
@@ -124,4 +141,18 @@ WHERE order_id = 6
 ORDER BY order_item_id;
 --- hint
 ROUND(quantity * unit_price * (1 - discount), 2)
+===
+
+=== exercise
+id: expr-5
+title: A quality-check sample
+--- prompt
+Quality control checks **every 500th order**. Return the `order_id` and `order_date` of orders placed on or after **2025-01-01** whose `order_id` is a multiple of 500.
+--- solution
+SELECT order_id, order_date
+FROM orders
+WHERE order_id % 500 = 0
+  AND order_date >= '2025-01-01';
+--- hint
+A number is a multiple of 500 when the remainder of dividing by 500 is 0: `order_id % 500 = 0` (or `MOD(order_id, 500) = 0`).
 ===

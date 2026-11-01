@@ -2,7 +2,7 @@ title: Subqueries
 module: Subqueries & CTEs
 level: Intermediate
 minutes: 15
-summary: Nest queries inside queries: scalar values, IN lists, EXISTS checks and derived tables.
+summary: Nest queries inside queries: scalar values, IN lists, ANY and ALL, EXISTS checks and derived tables.
 ---
 A **subquery** is a query in parentheses used inside another query. Where you put it decides what it must return.
 
@@ -25,6 +25,23 @@ SELECT customer_id, first_name
 FROM customers
 WHERE customer_id IN (SELECT customer_id FROM orders WHERE coupon_code = 'CYBER30');
 ```
+
+### ANY and ALL
+
+`ANY` and `ALL` compare a value with **every value a subquery returns**:
+
+- `x > ANY (subquery)`: true if `x` is greater than **at least one** of them.
+- `x > ALL (subquery)`: true if `x` is greater than **every one** of them.
+
+```sql
+-- laptops that cost more than every tablet
+SELECT name, unit_price
+FROM products
+WHERE category_id = 39
+  AND unit_price > ALL (SELECT unit_price FROM products WHERE category_id = 38);
+```
+
+`= ANY (...)` means the same as `IN (...)`, and `<> ALL (...)` the same as `NOT IN (...)`, including the NULL trap from the NULL lesson. `> ALL` is equivalent to "greater than the `MAX`", which is often how it's written; `SOME` is a synonym for `ANY`.
 
 ### Correlated subqueries and EXISTS
 
@@ -131,4 +148,31 @@ WHERE p.category_id = 44
   AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.product_id = p.product_id);
 --- hint
 NOT EXISTS (SELECT 1 FROM reviews r WHERE r.product_id = p.product_id)
+===
+
+=== exercise
+id: sub-6
+title: Pricier than every tablet
+--- prompt
+Tablets are category 38. Return the `product_id`, `name` and `unit_price` of every product that costs **more than all tablets**. Use `ALL`.
+--- solution
+SELECT product_id, name, unit_price
+FROM products
+WHERE unit_price > ALL (SELECT unit_price FROM products WHERE category_id = 38);
+--- hint
+`WHERE unit_price > ALL (SELECT unit_price FROM products WHERE category_id = 38)`
+===
+
+=== exercise
+id: sub-7
+title: Living near an office
+--- prompt
+Return the `customer_id` and `city` of **platinum** customers who live in a city where we have an office. Use `= ANY` with a subquery on `offices`.
+--- solution
+SELECT customer_id, city
+FROM customers
+WHERE loyalty_tier = 'platinum'
+  AND city = ANY (SELECT city FROM offices);
+--- hint
+`city = ANY (SELECT city FROM offices)` is true when the customer's city equals at least one office city.
 ===

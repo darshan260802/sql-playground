@@ -61,9 +61,9 @@ Rather than parsing SQL to decide what's allowed (fragile), every request runs u
 
 | Kind | How it's checked |
 |---|---|
-| Query (100) | Run the learner's SQL and the solution on `core` as `pg_reader`; compare the last result set: column count, row count, values normalized (numbers to 2 decimals, NULL distinct from 'NULL'), and order only when the exercise says so. Feedback names what's off (count, order, a missing row). |
+| Query (115) | Run the learner's SQL and the solution on `core` as `pg_reader`; compare the last result set: column count, row count, values normalized (numbers to 2 decimals, NULL distinct from 'NULL'), and order only when the exercise says so. Feedback names what's off (count, order, a missing row). |
 | DML (7) | In the learner's copy: `START TRANSACTION` → their statements → check query → `ROLLBACK`, then the same with the solution. Compare the check results. The learner's data never changes. |
-| DDL (9) | Setup (cleanup) → solution → check → cleanup → learner's SQL → check. Checks inspect `information_schema` or exercise behaviour (e.g. insert invalid rows with `INSERT IGNORE` to test CHECK constraints, fire a trigger inside a rolled-back transaction). |
+| DDL (14) | Setup (cleanup) → solution → check → cleanup → learner's SQL → check. Checks inspect `information_schema` or exercise behaviour (e.g. insert invalid rows with `INSERT IGNORE` to test CHECK constraints, fire a trigger inside a rolled-back transaction). |
 
 A Go test runs every exercise against real MySQL (verified on 8.0.46 and 8.4.13). It asserts that the solution passes, that a wrong answer fails, and that each check takes under 8 seconds.
 

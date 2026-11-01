@@ -2,7 +2,7 @@ title: INSERT, UPDATE and DELETE
 module: Changing data
 level: Intermediate
 minutes: 16
-summary: Add, change and remove rows safely, including upserts and updates driven by joins.
+summary: Add, change and remove rows safely, copy rows between tables, and use upserts and updates driven by joins.
 ---
 These exercises **change data**, so they need your own copy of the database. Sign in, and every change only affects your copy. You can restore the original at any time with **Reset database**.
 
@@ -16,7 +16,7 @@ VALUES (901, 'Example Traders', 'Spain', NULL, 4.0, '2026-02-01'),
        (902, 'Sample Goods',    'Italy', NULL, 3.5, '2026-02-01');
 ```
 
-List the columns explicitly: the statement then keeps working if columns are added or reordered, and omitted columns get their default. `INSERT INTO ... SELECT ...` copies rows from a query.
+List the columns explicitly: the statement then keeps working if columns are added or reordered, and omitted columns get their default.
 
 ### UPDATE
 
@@ -44,6 +44,32 @@ DELETE FROM reviews WHERE rating = 1 AND helpful_votes = 0;
 ```
 
 Foreign keys protect related data. Deleting a customer who still has orders fails with error 1451 until the orders are gone. `TRUNCATE TABLE t` empties a table instantly, but it can't be rolled back and doesn't work when other tables reference it.
+
+### Copying rows: INSERT INTO ... SELECT
+
+Instead of `VALUES`, an `INSERT` can take its rows from a query. The columns of the `SELECT` fill the listed columns in order:
+
+```sql
+INSERT INTO suppliers (supplier_id, name, country, contact_email, rating, since)
+SELECT 1000 + supplier_id, CONCAT(name, ' (EU)'), 'Germany', NULL, rating, CURDATE()
+FROM suppliers
+WHERE country = 'Italy';
+```
+
+The target table must already exist, and the types must fit.
+
+### SELECT INTO: making a new table from a query
+
+Several databases copy a query's result into a **new** table with `SELECT ... INTO new_table FROM ...` (SQL Server, Access). MySQL writes the same idea as `CREATE TABLE ... AS SELECT`:
+
+```sql
+CREATE TABLE expensive_products AS
+SELECT product_id, name, unit_price
+FROM products
+WHERE unit_price > 1000;
+```
+
+The new table gets the columns and rows, but **no primary key or indexes**; add them afterwards with `ALTER TABLE` if you need them. In MySQL, `SELECT ... INTO` means something else: it stores a single row into variables (`SELECT MAX(unit_price) INTO @max FROM products;`) or writes a file.
 
 ### Upserts
 
@@ -138,4 +164,51 @@ ON DUPLICATE KEY UPDATE budget = new.budget;
 SELECT department_id, name, budget FROM departments ORDER BY department_id;
 --- hint
 Insert both rows; for the existing one, ON DUPLICATE KEY UPDATE budget = new.budget.
+===
+
+=== exercise
+id: dml-6
+title: Fill a table from a query
+kind: ddl
+--- prompt
+A table **vip_customers** (`customer_id`, `full_name`, `country`) has been created in your copy (this exercise keeps it, unlike the rolled-back ones above). Fill it with an `INSERT INTO ... SELECT` that copies every **platinum** customer from **Japan**, with `full_name` being the first and last name separated by a space.
+--- setup
+DROP TABLE IF EXISTS vip_customers;
+CREATE TABLE vip_customers (
+  customer_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  full_name   VARCHAR(100) NOT NULL,
+  country     VARCHAR(60) NOT NULL
+);
+--- solution
+INSERT INTO vip_customers (customer_id, full_name, country)
+SELECT customer_id, CONCAT(first_name, ' ', last_name), country
+FROM customers
+WHERE loyalty_tier = 'platinum' AND country = 'Japan';
+--- check
+SELECT customer_id, full_name, country FROM vip_customers ORDER BY customer_id;
+--- hint
+`INSERT INTO vip_customers (customer_id, full_name, country) SELECT customer_id, CONCAT(first_name, ' ', last_name), country FROM customers WHERE ...`
+===
+
+=== exercise
+id: dml-7
+title: SELECT INTO, the MySQL way
+kind: ddl
+--- prompt
+Make a new table **monitors_backup** in your copy, holding a copy of every product in the Monitors category (`category_id = 40`), with all of the `products` columns. Use `CREATE TABLE ... AS SELECT`.
+--- setup
+DROP TABLE IF EXISTS monitors_backup;
+--- solution
+CREATE TABLE monitors_backup AS
+SELECT * FROM products WHERE category_id = 40;
+--- check
+SELECT COUNT(*) AS products,
+       ROUND(SUM(unit_price), 2) AS total_price,
+       MIN(product_id) AS first_id,
+       MAX(product_id) AS last_id,
+       (SELECT COUNT(*) FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'monitors_backup') AS columns_copied
+FROM monitors_backup;
+--- hint
+`CREATE TABLE monitors_backup AS SELECT * FROM products WHERE category_id = 40;`
 ===

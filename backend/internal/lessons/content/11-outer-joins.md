@@ -2,7 +2,7 @@ title: LEFT JOIN and finding what's missing
 module: Joins
 level: Intermediate
 minutes: 14
-summary: Keep unmatched rows with outer joins, and use them to find things that don't exist.
+summary: Keep unmatched rows with LEFT, RIGHT and full outer joins, and use them to find things that don't exist.
 ---
 `INNER JOIN` drops rows without a match. `LEFT JOIN` keeps **every row from the left table**. When there's no match, the right table's columns are filled with `NULL`:
 
@@ -54,7 +54,42 @@ LEFT JOIN orders o
 GROUP BY c.customer_id;
 ```
 
-`RIGHT JOIN` is the mirror image (keep every row of the right table). MySQL has no `FULL OUTER JOIN`; emulate it with a `UNION` of a left and a right join.
+### RIGHT JOIN
+
+`RIGHT JOIN` is the mirror image: it keeps **every row of the right table**. These two queries return the same rows:
+
+```sql
+SELECT c.name, COUNT(p.product_id) AS products
+FROM products p
+RIGHT JOIN categories c ON c.category_id = p.category_id
+GROUP BY c.category_id, c.name;
+
+SELECT c.name, COUNT(p.product_id) AS products
+FROM categories c
+LEFT JOIN products p ON p.category_id = c.category_id
+GROUP BY c.category_id, c.name;
+```
+
+Most people write every outer join as a `LEFT JOIN` (put the table you want to keep first), because a chain of joins then reads in one direction.
+
+### FULL OUTER JOIN
+
+A **full outer join** keeps unmatched rows from **both** sides. MySQL has no `FULL OUTER JOIN` keyword, so combine a left join and a right join with `UNION`:
+
+```sql
+-- countries where we have customers, offices, or both
+SELECT c.country, c.customers, o.offices
+FROM (SELECT country, COUNT(*) AS customers FROM customers GROUP BY country) c
+LEFT JOIN (SELECT country, COUNT(*) AS offices FROM offices GROUP BY country) o
+  ON o.country = c.country
+UNION
+SELECT o.country, c.customers, o.offices
+FROM (SELECT country, COUNT(*) AS customers FROM customers GROUP BY country) c
+RIGHT JOIN (SELECT country, COUNT(*) AS offices FROM offices GROUP BY country) o
+  ON o.country = c.country;
+```
+
+The left join gives all matches plus left-only rows; the right join adds the right-only rows; `UNION` removes the matched rows the two halves share. In PostgreSQL or SQL Server you'd write `FULL OUTER JOIN ... ON ...` instead.
 
 === exercise
 id: left-1
@@ -114,4 +149,37 @@ WHERE p.category_id = 33
 GROUP BY p.product_id, p.name;
 --- hint
 COUNT(r.review_id), not COUNT(*): the NULL row of an unmatched product must count as 0.
+===
+
+=== exercise
+id: left-5
+title: Every category, even empty ones
+--- prompt
+Return every category's `name` with the number of products in it as **products**, including categories that have **no products** (0). Try writing it with a `RIGHT JOIN` from `products` to `categories`.
+--- solution
+SELECT c.name, COUNT(p.product_id) AS products
+FROM products p
+RIGHT JOIN categories c ON c.category_id = p.category_id
+GROUP BY c.category_id, c.name;
+--- hint
+`FROM products p RIGHT JOIN categories c ON ...` keeps every category. Count `p.product_id`, not `*`, so empty categories get 0.
+===
+
+=== exercise
+id: left-6
+title: Where we buy and where we sell
+--- prompt
+Compare the countries we **sell to** (customers) with the countries we **buy from** (suppliers). Return one row per country that appears in **either** table, with `country`, the number of **customers** and the number of **suppliers** there (NULL where there are none).
+--- solution
+SELECT c.country, c.customers, s.suppliers
+FROM (SELECT country, COUNT(*) AS customers FROM customers GROUP BY country) c
+LEFT JOIN (SELECT country, COUNT(*) AS suppliers FROM suppliers GROUP BY country) s
+  ON s.country = c.country
+UNION
+SELECT s.country, c.customers, s.suppliers
+FROM (SELECT country, COUNT(*) AS customers FROM customers GROUP BY country) c
+RIGHT JOIN (SELECT country, COUNT(*) AS suppliers FROM suppliers GROUP BY country) s
+  ON s.country = c.country;
+--- hint
+This is a full outer join: count per country on each side in a derived table, then `LEFT JOIN ... UNION ... RIGHT JOIN` on country. In the right-join half, take the country from the suppliers side.
 ===

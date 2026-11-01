@@ -38,6 +38,19 @@ ORDER BY order_date DESC
 LIMIT 3;
 ```
 
+### TOP and FETCH FIRST in other databases
+
+Limiting rows isn't standardised, so you'll meet several spellings. MySQL (and PostgreSQL, SQLite) use `LIMIT`; the others:
+
+| Database | The 3 most recent orders |
+|---|---|
+| MySQL, PostgreSQL, SQLite | `SELECT ... ORDER BY order_date DESC LIMIT 3` |
+| SQL Server, MS Access | `SELECT TOP 3 ... ORDER BY order_date DESC` |
+| Oracle 12c+, standard SQL | `SELECT ... ORDER BY order_date DESC FETCH FIRST 3 ROWS ONLY` |
+| older Oracle | `SELECT ... WHERE ROWNUM <= 3` |
+
+SQL Server also has `TOP 10 PERCENT`. MySQL has no percent form; count the rows first, or use the `NTILE` window function (in the ranking lesson).
+
 ### Paging with OFFSET
 
 `LIMIT 10 OFFSET 20` skips 20 rows and returns the next 10, i.e. page 3 with 10 rows per page. MySQL also accepts `LIMIT 20, 10` (offset first), which is easy to misread.

@@ -72,6 +72,7 @@ func TestClassify(t *testing.T) {
 		"create table t (a int)":                  KindWrite,
 		"DELETE FROM t":                           KindFree,
 		"DROP TABLE t":                            KindFree,
+		"PREPARE s FROM 'SELECT 1'":               KindFree,
 		"START TRANSACTION":                       KindTxn,
 		"rollback":                                KindTxn,
 		"UPDATE t SET a = 1":                      KindWrite,

@@ -4,7 +4,7 @@ A self-hosted MySQL playground for learning SQL on realistic data, from your fir
 
 - **Anyone** can open the playground and run read-only queries against ~1.7 million rows of e-commerce, HR and finance data.
 - **Signed-in learners** get a **private copy of the whole database** where `INSERT`, `UPDATE`, `DELETE`, `CREATE`, triggers and stored procedures all work. Changes only affect their copy, and **Reset database** restores the original in about 10 seconds.
-- **30 lessons with 116 auto-checked exercises** take you from basics to analytics case studies (cohorts, gaps-and-islands, RFM, drawdowns).
+- **33 lessons with 136 auto-checked exercises** take you from basics to analytics case studies (cohorts, gaps-and-islands, RFM, drawdowns).
 
 It's built for a small group (up to 20 accounts) on a single VPS. Behaviour matches real MySQL, because it *is* real MySQL 8.
 
@@ -34,7 +34,7 @@ On phones every screen has its own layout: one region at a time (query, results 
 - Saved queries, searchable history and share links (`/q/<id>`)
 
 **Learning**
-- 30 lessons in 9 modules: Basics → Aggregation → Joins → Subqueries & CTEs → Window functions → Dates, text & JSON → Changing data → Designing databases → Analytics case studies
+- 33 lessons in 9 modules, covering every topic of the W3Schools SQL tutorial and more: Basics → Aggregation → Joins → Subqueries & CTEs → Window functions → Dates, text & JSON → Changing data → Designing databases → Analytics case studies
 - Exercises are checked against the real database:
   - **query** exercises compare your result with the solution's (order-aware when it matters, with numeric tolerance)
   - **DML** exercises run inside a transaction that is rolled back

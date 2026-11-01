@@ -48,6 +48,16 @@ CREATE INDEX idx_stock_prices_date ON stock_prices (trade_date);
 - An index that contains every column the query needs is a **covering index** (`Using index` in Extra).
 - Wrapping a column in a function (`WHERE YEAR(order_date) = 2025`) usually prevents index use. Write a range instead.
 
+### Listing and dropping indexes
+
+```sql
+SHOW INDEX FROM orders;                         -- every index on a table
+DROP INDEX idx_stock_prices_date ON stock_prices;
+ALTER TABLE stock_prices DROP INDEX idx_stock_prices_date;   -- the same thing
+```
+
+`CREATE UNIQUE INDEX` makes an index that also enforces uniqueness, like a `UNIQUE` constraint. Dropping an index never deletes data, only the lookup structure; queries that relied on it get slower.
+
 ### The cost
 
 Every index takes disk space and slows down INSERT/UPDATE/DELETE, because the index must be updated too. Index what you actually filter, join and sort on.
@@ -107,4 +117,30 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'practice_contacts' AND INDEX_N
 ORDER BY item;
 --- hint
 A self-join DELETE: DELETE c2 FROM t c1 JOIN t c2 ON c1.email = c2.email AND c1.contact_id < c2.contact_id. Then ALTER TABLE ... ADD UNIQUE INDEX.
+===
+
+=== exercise
+id: idx-3
+title: Drop a duplicate index
+kind: ddl
+--- prompt
+The table **review_votes** has two identical indexes on `helpful_votes`: **idx_votes** and **idx_votes_copy**. Every index slows down writes, so drop **idx_votes_copy** and keep the other.
+--- setup
+DROP TABLE IF EXISTS review_votes;
+CREATE TABLE review_votes (
+  review_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  helpful_votes INT NOT NULL,
+  INDEX idx_votes (helpful_votes),
+  INDEX idx_votes_copy (helpful_votes)
+);
+INSERT INTO review_votes SELECT review_id, helpful_votes FROM reviews WHERE review_id <= 500;
+--- solution
+DROP INDEX idx_votes_copy ON review_votes;
+--- check
+SELECT index_name, column_name
+FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND table_name = 'review_votes'
+ORDER BY index_name, seq_in_index;
+--- hint
+`DROP INDEX index_name ON table_name;`
 ===

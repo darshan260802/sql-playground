@@ -254,7 +254,7 @@ func Classify(sql string) Kind {
 			}
 		}
 		return KindRead
-	case "DELETE", "TRUNCATE", "DROP", "OPTIMIZE", "ANALYZE", "CHECK", "SET", "USE", "CALL", "DEALLOCATE":
+	case "DELETE", "TRUNCATE", "DROP", "OPTIMIZE", "ANALYZE", "CHECK", "SET", "USE", "CALL", "PREPARE", "DEALLOCATE":
 		// CALL may write, but the watchdog still enforces the quota while it runs.
 		return KindFree
 	case "START", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE", "XA":
