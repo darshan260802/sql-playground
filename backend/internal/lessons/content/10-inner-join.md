@@ -2,7 +2,7 @@ title: Joining tables
 module: Joins
 level: Beginner
 minutes: 15
-summary: Combine rows from related tables with INNER JOIN and table aliases.
+summary: Combine rows from related tables with INNER JOIN, table aliases and CROSS JOIN.
 ---
 Data is split across tables to avoid repetition: an order line stores a `product_id`, not the product's name. A **join** puts related rows back together.
 
@@ -21,7 +21,7 @@ WHERE oi.order_id = 6;
 
 Columns ending in `_id` usually point at another table's primary key (the Tables panel marks them with a link icon):
 
-```
+```text
 orders.customer_id      → customers.customer_id
 order_items.order_id    → orders.order_id
 order_items.product_id  → products.product_id
@@ -48,6 +48,19 @@ ORDER BY revenue DESC;
 ### `USING` shorthand
 
 When the column has the same name on both sides, `JOIN products USING (product_id)` is equivalent to the ON version.
+
+### CROSS JOIN: every combination
+
+`CROSS JOIN` has no `ON`: it pairs **every** row on the left with **every** row on the right (a *Cartesian product*). 14 departments × 4 quarters gives 56 rows:
+
+```sql
+SELECT d.name, q.quarter
+FROM departments d
+CROSS JOIN (SELECT DISTINCT quarter FROM calendar) q
+ORDER BY d.name, q.quarter;
+```
+
+It's useful for building grids (every product × every month, so months with no sales still show up) and for attaching a single value to every row. Forgetting the `ON` of a normal join does the same thing by accident, which is how a query on two 10,000-row tables suddenly returns 100 million rows.
 
 > **Watch the row count.** Joining one order to its three items gives three rows. If a total looks too large, a join is probably multiplying rows.
 
@@ -121,4 +134,19 @@ GROUP BY c.country
 ORDER BY orders DESC;
 --- hint
 The country lives on customers, the date on orders.
+===
+
+=== exercise
+id: join-5
+title: A quarterly planning grid
+ordered: true
+--- prompt
+Finance wants one planning row for **every department in every quarter**. Return each department's `name` with each `quarter` (1 to 4), sorted by name, then quarter. Take the quarters from the `calendar` table.
+--- solution
+SELECT d.name, q.quarter
+FROM departments d
+CROSS JOIN (SELECT DISTINCT quarter FROM calendar) q
+ORDER BY d.name, q.quarter;
+--- hint
+`CROSS JOIN (SELECT DISTINCT quarter FROM calendar) q` gives every department each of the four quarters.
 ===

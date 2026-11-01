@@ -217,7 +217,8 @@ func returnsRows(sqlText string) bool {
 	}
 	switch w[0] {
 	case "SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "TABLE", "VALUES", "CALL", "CHECK", "ANALYZE",
-		"OPTIMIZE", "REPAIR", "CHECKSUM", "HELP":
+		"OPTIMIZE", "REPAIR", "CHECKSUM", "HELP", "EXECUTE":
+		// CALL and EXECUTE return rows when the procedure or prepared statement selects
 		return true
 	case "WITH":
 		return Classify(sqlText) == KindRead

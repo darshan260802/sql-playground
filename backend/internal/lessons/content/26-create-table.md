@@ -30,6 +30,50 @@ CREATE TABLE wishlist_demo (
 | yes/no | `TINYINT(1)` (MySQL's `BOOLEAN` is an alias for it) |
 | fixed set of values | `ENUM('a','b')` |
 
+### MySQL data types in more detail
+
+**Numbers**
+
+| Type | Range / precision |
+|---|---|
+| `TINYINT`, `SMALLINT`, `MEDIUMINT`, `INT`, `BIGINT` | 1, 2, 3, 4 and 8 bytes: `INT` goes to about ±2.1 billion, `INT UNSIGNED` to 4.29 billion |
+| `DECIMAL(p, s)` | exact: `p` digits in total, `s` after the point. `DECIMAL(10,2)` holds up to 99,999,999.99 |
+| `FLOAT`, `DOUBLE` | approximate binary floating point: fine for measurements, wrong for money |
+
+**Text**
+
+| Type | Notes |
+|---|---|
+| `CHAR(n)` | fixed length, padded: codes that are always *n* characters, like `CHAR(3)` currency codes |
+| `VARCHAR(n)` | variable length, up to *n* characters |
+| `TEXT`, `MEDIUMTEXT`, `LONGTEXT` | long text (64 KB, 16 MB, 4 GB) |
+| `ENUM(...)`, `SET(...)` | one value, or several values, from a fixed list |
+| `BLOB` | binary data |
+
+**Dates and times**
+
+| Type | Holds |
+|---|---|
+| `DATE` | a day: `2026-01-31` |
+| `TIME` | a time of day or a duration: `14:30:00` |
+| `DATETIME` | a date and time: `2026-01-31 14:30:00` |
+| `TIMESTAMP` | a date and time stored in UTC and converted to the session's time zone (1970 to 2038) |
+| `YEAR` | a year: `2026` |
+
+`JSON` holds JSON documents (see the JSON lesson). `CAST(x AS type)` converts between types: `CAST('2026-01-31' AS DATE)`, `CAST(price AS SIGNED)`.
+
+### AUTO_INCREMENT
+
+An `AUTO_INCREMENT` column numbers new rows for you: leave it out of the `INSERT` (or pass `NULL`) and MySQL uses the next number. It must be (part of) a key, and there's one per table:
+
+```sql
+INSERT INTO wishlist_demo (customer_id, product_id) VALUES (84, 1);
+SELECT LAST_INSERT_ID();          -- the id that INSERT just got
+ALTER TABLE wishlist_demo AUTO_INCREMENT = 1000;   -- start the next id at 1000
+```
+
+Numbers are never reused: after a rollback or a delete there will be gaps, which is normal. Other databases use `IDENTITY` (SQL Server) or sequences instead.
+
 ### Constraints
 
 - `PRIMARY KEY`: uniquely identifies a row; implies NOT NULL. One per table.
@@ -38,6 +82,24 @@ CREATE TABLE wishlist_demo (
 - `DEFAULT`: the value used when an INSERT omits the column.
 - `FOREIGN KEY`: the value must exist in the referenced table. The column types must match exactly, so `INT UNSIGNED` can only reference `INT UNSIGNED`.
 - `CHECK (condition)`: an arbitrary rule, enforced since MySQL 8.0.16.
+
+### Adding and removing constraints later
+
+Constraints can be added to an existing table (the current rows must already satisfy them) and removed by name:
+
+```sql
+ALTER TABLE wishlist_demo ADD CONSTRAINT chk_wishlist_customer CHECK (customer_id > 0);
+ALTER TABLE wishlist_demo DROP CHECK chk_wishlist_customer;
+
+ALTER TABLE wishlist_demo ADD UNIQUE (customer_id, product_id);
+ALTER TABLE wishlist_demo ALTER COLUMN added_at SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE wishlist_demo ALTER COLUMN added_at DROP DEFAULT;
+ALTER TABLE wishlist_demo MODIFY customer_id INT UNSIGNED NULL;   -- remove NOT NULL
+ALTER TABLE wishlist_demo DROP FOREIGN KEY wishlist_demo_ibfk_1;
+ALTER TABLE wishlist_demo DROP PRIMARY KEY;
+```
+
+Give constraints names (`CONSTRAINT name ...`) when you create them; otherwise MySQL makes one up, and you'll need `SHOW CREATE TABLE` to find it before you can drop it.
 
 ### Changing tables
 
@@ -48,6 +110,8 @@ ALTER TABLE wishlist_demo MODIFY comment VARCHAR(500) NULL;    -- change type
 ALTER TABLE wishlist_demo DROP COLUMN comment;
 DROP TABLE IF EXISTS wishlist_demo;
 ```
+
+`DROP TABLE` deletes the table and all its rows. `TRUNCATE TABLE t` keeps the table but deletes every row (and resets `AUTO_INCREMENT`).
 
 `SHOW CREATE TABLE products;` prints the exact DDL of any table, and `DESCRIBE products;` lists its columns.
 
@@ -152,4 +216,47 @@ SELECT code, pct FROM promotions ORDER BY code;
 ROLLBACK;
 --- hint
 Column-level: pct ... CHECK (pct > 0 AND pct <= 0.50). Table-level: CHECK (ends_on >= starts_on).
+===
+
+=== exercise
+id: ddl-4
+title: Where the money is
+ordered: true
+--- prompt
+Money should always be stored as `DECIMAL`. Using `information_schema.columns`, list every **decimal** column in the current database: `table_name`, `column_name` and `column_type`, sorted by table name, then column name.
+--- solution
+SELECT table_name, column_name, column_type
+FROM information_schema.columns
+WHERE table_schema = DATABASE() AND data_type = 'decimal'
+ORDER BY table_name, column_name;
+--- hint
+Filter on `table_schema = DATABASE()` and `data_type = 'decimal'`. The `column_type` column shows the precision, like `decimal(10,2)`.
+===
+
+=== exercise
+id: ddl-5
+title: Rules for an existing table
+kind: ddl
+--- prompt
+A table **gift_cards** (`card_id`, `amount`) already exists. Without recreating it, change it so that:
+
+1. `amount` must be **greater than 0** (a `CHECK` constraint), and
+2. `amount` defaults to **25** when an `INSERT` leaves it out.
+
+We'll test it by inserting a negative card, a normal one, and one without an amount.
+--- setup
+DROP TABLE IF EXISTS gift_cards;
+CREATE TABLE gift_cards (
+  card_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  amount  DECIMAL(8,2) NOT NULL
+);
+--- solution
+ALTER TABLE gift_cards ADD CONSTRAINT chk_gift_cards_amount CHECK (amount > 0);
+ALTER TABLE gift_cards ALTER COLUMN amount SET DEFAULT 25;
+--- check
+INSERT IGNORE INTO gift_cards (card_id, amount) VALUES (1, -5), (2, 10);
+INSERT IGNORE INTO gift_cards (card_id) VALUES (3);
+SELECT card_id, amount FROM gift_cards ORDER BY card_id;
+--- hint
+Two ALTER TABLE statements: `ADD CONSTRAINT name CHECK (amount > 0)` and `ALTER COLUMN amount SET DEFAULT 25`.
 ===

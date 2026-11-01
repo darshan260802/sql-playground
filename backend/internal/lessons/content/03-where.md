@@ -2,7 +2,7 @@ title: Filtering rows with WHERE
 module: Basics
 level: Beginner
 minutes: 12
-summary: Keep only the rows you need using comparisons, AND/OR, IN, BETWEEN and LIKE.
+summary: Keep only the rows you need using comparisons, AND, OR, NOT, IN, BETWEEN, LIKE and wildcards.
 ---
 `WHERE` keeps the rows for which a condition is true. It comes right after `FROM`:
 
@@ -22,9 +22,13 @@ WHERE unit_price > 1000;
 
 Text values go in single quotes: `WHERE country = 'India'`. Text comparisons here are **case-insensitive**, so `'india'` matches too.
 
-### Combining conditions
+### Combining conditions: AND, OR, NOT
 
-Use `AND` (both must be true), `OR` (either is true) and `NOT`. `AND` binds tighter than `OR`, so use parentheses when you mix them:
+- `AND`: both conditions must be true.
+- `OR`: at least one must be true.
+- `NOT`: reverses a condition.
+
+`AND` binds tighter than `OR`, so use parentheses when you mix them:
 
 ```sql
 SELECT customer_id, country, loyalty_tier
@@ -33,7 +37,21 @@ WHERE (country = 'Canada' OR country = 'Australia')
   AND loyalty_tier = 'platinum';
 ```
 
-### IN, BETWEEN and LIKE
+Without the parentheses, MySQL would read it as "Canadians, plus platinum Australians".
+
+`NOT` goes in front of a condition, or inside `NOT IN`, `NOT BETWEEN`, `NOT LIKE` and `IS NOT NULL`:
+
+```sql
+-- everyone except the US and Canada
+WHERE country NOT IN ('United States', 'Canada')
+
+-- same as: WHERE NOT (unit_price >= 10 AND unit_price <= 20)
+WHERE unit_price NOT BETWEEN 10 AND 20
+
+WHERE NOT (status = 'delivered' OR status = 'shipped')
+```
+
+### IN and BETWEEN
 
 ```sql
 -- shorthand for several ORs
@@ -41,10 +59,29 @@ WHERE country IN ('Canada', 'Australia')
 
 -- inclusive range (both ends included)
 WHERE unit_price BETWEEN 10 AND 20
-
--- pattern matching: % = any characters, _ = exactly one character
-WHERE name LIKE '%Wireless%'
 ```
+
+`BETWEEN` also works on text (alphabetical) and dates.
+
+### LIKE and wildcards
+
+`LIKE` matches text against a pattern with two **wildcards**:
+
+| Wildcard | Matches | Example | Matches |
+|---|---|---|---|
+| `%` | any number of characters, including none | `'%Wireless%'` | *Pro Wireless Mouse*, *Wireless* |
+| `_` | exactly one character | `'ELE-____5'` | *ELE-10045*, but not *ELE-1045* |
+
+```sql
+SELECT name FROM products WHERE name LIKE 'Zentek%';    -- starts with Zentek
+SELECT email FROM customers WHERE email LIKE '%.org';   -- ends with .org
+SELECT first_name FROM customers WHERE first_name LIKE '___';  -- exactly three letters
+```
+
+- `NOT LIKE` keeps the rows that *don't* match.
+- To search for a literal `%` or `_`, escape it with a backslash: `LIKE '%50\%%'` finds text containing *50%*.
+- Like `=`, `LIKE` is case-insensitive on this database's text columns.
+- Other databases add `[abc]` character lists to `LIKE` (SQL Server). In MySQL, use `REGEXP` for patterns like that: `WHERE sku REGEXP '^(ELE|SPO)-'`.
 
 ### Filtering dates and times
 
@@ -126,4 +163,30 @@ WHERE department_id IN (9, 10)
   AND termination_date IS NULL;
 --- hint
 Use `IS NULL` for missing values: `= NULL` never matches anything.
+===
+
+=== exercise
+id: where-6
+title: Platinum outside the Americas
+--- prompt
+Return the `customer_id` and `country` of **platinum** customers who signed up on or after **2025-06-01** and do **not** live in the United States, Canada, Mexico or Brazil.
+--- solution
+SELECT customer_id, country
+FROM customers
+WHERE loyalty_tier = 'platinum'
+  AND signup_at >= '2025-06-01'
+  AND country NOT IN ('United States', 'Canada', 'Mexico', 'Brazil');
+--- hint
+`NOT IN ('United States', 'Canada', 'Mexico', 'Brazil')`, combined with the other two conditions using AND.
+===
+
+=== exercise
+id: where-7
+title: Electronics SKUs ending in 5
+--- prompt
+Electronics SKUs look like `ELE-` followed by five digits. Return the `sku` and `name` of every product whose SKU is `ELE-`, then **any four characters**, then the digit **5**.
+--- solution
+SELECT sku, name FROM products WHERE sku LIKE 'ELE-____5';
+--- hint
+`_` matches exactly one character, so four of them in a row match any four: `LIKE 'ELE-____5'`.
 ===

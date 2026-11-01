@@ -31,6 +31,8 @@ FROM orders
 LIMIT 10;
 ```
 
+Other databases spell `IFNULL` differently: `ISNULL(a, b)` in SQL Server, `NVL(a, b)` in Oracle. `COALESCE` works everywhere, so it's the one to remember. (In MySQL, `ISNULL(x)` takes one argument and tests whether `x` is NULL.)
+
 `NULLIF(a, b)` does the reverse: it returns NULL when `a = b`. Its classic use is avoiding division by zero: `x / NULLIF(y, 0)`.
 
 ### NULL in arithmetic and text
