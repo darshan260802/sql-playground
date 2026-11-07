@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue } from 'motion/react'
 import { toast } from 'sonner'
 import { Bookmark, Lock, MoreHorizontal, PanelLeft, Play, Plus, Share2, Square, X } from 'lucide-react'
-import type { SQLNamespace } from '@codemirror/lang-sql'
 import { api, ApiError, newRunId, type QueryResponse, type SchemaInfo, type Target } from '../lib/api'
 import { useAuth, useEffectiveTarget } from '../state/auth'
 import { addLocalHistory, useTabs, useUI } from '../state/stores'
 import { copyText, formatBytes, formatInt, modKey, spring, springSnappy, storage } from '../lib/util'
 import { useIsMobile } from '../lib/hooks'
 import { SqlEditor, type EditorHandle } from '../components/SqlEditor'
+import { completionSchema } from '../lib/sqlComplete'
 import { ResultsPanel } from '../components/ResultsPanel'
 import { Sidebar } from '../components/Sidebar'
 import { Splitter } from '../components/Splitter'
@@ -51,12 +51,7 @@ export function Playground() {
     }
   }, [target, schemaVersion, user?.id])
 
-  const namespace = useMemo<SQLNamespace | undefined>(() => {
-    if (!schema) return undefined
-    const ns: Record<string, { label: string; type: string; detail: string }[]> = {}
-    for (const t of schema.tables) ns[t.name] = t.columns.map((c) => ({ label: c.name, type: 'property', detail: c.type }))
-    return ns
-  }, [schema])
+  const namespace = useMemo(() => (schema ? completionSchema(schema) : undefined), [schema])
 
   // ---------------------------------------------------------------- running
   const [txOpen, setTxOpen] = useState<Record<Target, boolean>>({ mine: false, core: false })

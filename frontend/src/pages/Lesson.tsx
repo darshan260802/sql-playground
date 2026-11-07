@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { toast } from 'sonner'
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Eye, Lightbulb, Lock, Play, Sparkles } from 'lucide-react'
 import { api, ApiError, newRunId, type CheckOutcome, type Exercise, type Lesson as LessonT, type StatementResult } from '../lib/api'
@@ -12,12 +12,20 @@ import { Segmented } from '../components/Segmented'
 import { Markdown, HighlightedSQL } from '../components/Markdown'
 import { SqlEditor, type EditorHandle } from '../components/SqlEditor'
 import { DataGrid } from '../components/DataGrid'
+import { Splitter } from '../components/Splitter'
+import { useCompletionSchema } from '../lib/useCompletionSchema'
 
 const KIND_LABEL: Record<Exercise['kind'], string> = { select: 'Query', dml: 'Changes data', ddl: 'Schema design' }
 
 function scrollMainToTop() {
   document.querySelector('.app-main')?.scrollTo({ top: 0 })
 }
+
+// The exercise panel's width on wide screens: dragged by the learner, remembered across visits.
+const PANEL_KEY = 'sqlpg.lessonPanelW'
+const PANEL_MIN = 340
+const ARTICLE_MIN = 380
+const defaultPanelWidth = () => (window.innerWidth >= 1100 ? 460 : 400)
 
 export function Lesson() {
   const { slug = '' } = useParams()
@@ -29,6 +37,25 @@ export function Lesson() {
   const [solved, setSolved] = useState<Set<string>>(new Set())
   const mobile = useIsCompact()
   const [view, setView] = useState<'read' | 'practice'>('read')
+  const pageRef = useRef<HTMLDivElement>(null)
+  const panelW = useMotionValue(storage.get(PANEL_KEY, defaultPanelWidth()))
+  // the widest the panel may get while the article keeps a readable width
+  const maxPanel = useCallback(() => {
+    const page = pageRef.current
+    if (!page) return 760
+    const cs = getComputedStyle(page)
+    const inner = page.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+    return Math.max(PANEL_MIN, inner - 2 * parseFloat(cs.columnGap || '0') - 1 - ARTICLE_MIN)
+  }, [])
+  useEffect(() => {
+    const fit = () => {
+      const max = maxPanel()
+      if (panelW.get() > max) panelW.set(max)
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [panelW, maxPanel, lesson, mobile])
 
   useEffect(() => {
     setLesson(null)
@@ -94,7 +121,7 @@ export function Lesson() {
   }
 
   return (
-    <div className="lesson-page">
+    <div className="lesson-page" ref={pageRef}>
       <header className="lesson-head">
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link to="/learn">Learn</Link>
@@ -154,8 +181,22 @@ export function Lesson() {
         </article>
       )}
 
+      {!mobile && (
+        <Splitter
+          axis="x"
+          invert
+          size={panelW}
+          min={PANEL_MIN}
+          max={maxPanel}
+          defaultSize={defaultPanelWidth()}
+          storageKey={PANEL_KEY}
+          label="Resize the lesson and exercises"
+          className="lesson-splitter"
+        />
+      )}
+
       {showPractice && (
-      <aside className="exercise-panel" aria-label="Exercises">
+      <motion.aside className="exercise-panel" aria-label="Exercises" style={mobile ? undefined : { width: panelW }}>
         <div className="exercise-sticky">
           <div className="exercise-tabs">
             <div className="tabs ruled" role="tablist" aria-label="Exercises in this lesson">
@@ -185,7 +226,7 @@ export function Lesson() {
             </motion.div>
           </AnimatePresence>
         </div>
-      </aside>
+      </motion.aside>
       )}
     </div>
   )
@@ -203,6 +244,9 @@ interface CardProps {
 
 function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLesson }: CardProps) {
   const openAuth = useUI((s) => s.openAuth)
+  const { user } = useAuth()
+  // exercises that change data run on the learner's copy, which may hold tables they created
+  const schema = useCompletionSchema(ex.requires_login && dbReady ? 'mine' : 'core', user ? String(user.id) : 'anon')
   const draftKey = `sqlpg.draft.${ex.id}`
   const [sql, setSql] = useState(() => storage.get<string>(draftKey, '') || ex.last_sql || '')
   const [busy, setBusy] = useState<'check' | 'run' | null>(null)
@@ -330,6 +374,7 @@ function ExerciseCard({ ex, signedIn, dbReady, solved, onSolved, onNext, nextLes
               onChange={setSql}
               onRun={check}
               handleRef={editor}
+              schema={schema}
               placeholder={ex.kind === 'select' ? '-- Write your query here' : '-- Write your statements here'}
               ariaLabel={`Answer for ${ex.title}`}
               compact

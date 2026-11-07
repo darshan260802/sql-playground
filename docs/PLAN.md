@@ -84,7 +84,9 @@ The interface was revamped with the `design-taste-frontend` skill (installed in 
 **Each screen answers one question first:**
 - *Playground:* "What does my query return, and on which database?" The title row names the screen, shows the database switch (your copy, with its storage, or the read-only original) and the Run button. Before the first run, the results area offers example queries and the keyboard shortcuts instead of an empty panel.
 - *Learn:* "Where do I continue, and how far along am I?" A Continue button and the progress at its true ratio come first; lessons are rows with a progress ring, level, minutes and solved count.
-- *Lesson:* "Can I solve this exercise?" The article and the exercise panel sit side by side; below 1024px they take turns behind a Lesson / Exercises switch, so the exercise is one tap away instead of a long scroll.
+- *Lesson:* "Can I solve this exercise?" The article and the exercise panel sit side by side, split by a handle that is dragged (or moved with the arrow keys) and remembered per browser; double-click resets it. Below 1024px they take turns behind a Lesson / Exercises switch, so the exercise is one tap away instead of a long scroll.
+
+**Autocomplete** works the same way in the playground and the exercise editors. lang-sql provides the keywords. A small reader (`frontend/src/lib/sqlScope.ts`) supplies the names, taken from the statement being typed: CTEs and their columns, derived tables, table aliases (`o.` lists the columns of `orders o`, at any depth) and column aliases from the SELECT list. This works because lang-sql's own schema completion only resolves aliases at the top level and knows nothing of CTEs.
 
 **Phones** get their own composition: a bottom bar (Playground, Learn, theme, account) replaces the icon rail; the playground shows one region at a time (Query, Results, Tables) with Run in a thumb-height bar and switches to Results after a run; dialogs become draggable bottom sheets.
 

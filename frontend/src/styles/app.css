@@ -694,11 +694,12 @@ a.lesson-row:active { background: var(--raised); }
 
 .lesson-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 480px);
-  grid-template-areas: 'head panel' 'article panel';
+  /* article | drag handle | exercise panel (its width is set by the handle) */
+  grid-template-columns: minmax(0, 1fr) 1px auto;
+  grid-template-areas: 'head split panel' 'article split panel';
   grid-template-rows: auto 1fr;
-  column-gap: 48px;
-  max-width: 1280px;
+  column-gap: 24px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 28px 32px 64px;
   align-items: start;
@@ -731,6 +732,29 @@ a.lesson-row:active { background: var(--raised); }
   border-radius: var(--radius-card);
 }
 .exercise-sticky { display: grid; gap: 4px; }
+
+/* the handle stays beside the sticky panel while the article scrolls */
+.lesson-splitter {
+  grid-area: split;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+  height: calc(100dvh - 32px);
+  background: transparent;
+}
+.lesson-splitter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  width: 5px;
+  height: 40px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--control);
+  transition: background-color var(--dur-fast);
+}
+.lesson-splitter:hover::after, .lesson-splitter:active::after, .lesson-splitter:focus-visible::after { background: var(--accent-ink); }
 .exercise-tabs { display: flex; align-items: stretch; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
 .exercise-tabs .tabs { gap: 2px; }
 .exercise-tabs .tabs button { min-width: 34px; justify-content: center; height: 40px; font-size: var(--fs-small); }
@@ -793,7 +817,7 @@ a.lesson-row:active { background: var(--raised); }
 @media (max-width: 1100px) {
   .learn-layout { grid-template-columns: minmax(0, 1fr) 260px; column-gap: 32px; }
   .lesson-row-meta span:first-child { display: none; }
-  .lesson-page { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); column-gap: 32px; padding: 24px 24px 56px; }
+  .lesson-page { column-gap: 16px; padding: 24px 24px 56px; }
   .exercise-panel { padding: 0 16px 16px; }
   .scope-note, .wide-only { display: none; }
   .title-row .btn-text .label { display: none; }
@@ -806,6 +830,7 @@ a.lesson-row:active { background: var(--raised); }
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'head' 'switch' 'article' 'panel';
     grid-template-rows: none;
+    column-gap: 0;
     max-width: 760px;
   }
   .lesson-switch { position: sticky; top: 0; z-index: 5; margin: 0 -24px; padding: 0 24px; background: var(--ground); }

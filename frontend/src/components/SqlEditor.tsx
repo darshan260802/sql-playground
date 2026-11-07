@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { EditorState, Compartment, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
 import {
   EditorView,
   Decoration,
@@ -15,8 +15,9 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput } from '@codemirror/language'
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
-import { sql, MySQL, type SQLNamespace } from '@codemirror/lang-sql'
+import { sql, MySQL } from '@codemirror/lang-sql'
 import { tags as t } from '@lezer/highlight'
+import { scopeCompletions, type CompletionSchema } from '../lib/sqlComplete'
 
 export interface EditorHandle {
   focus: () => void
@@ -31,7 +32,8 @@ interface Props {
   onChange: (value: string) => void
   onRun?: () => void
   onSave?: () => void
-  schema?: SQLNamespace
+  /** Tables and columns for autocompletion; CTEs and aliases in the query are added as you type. */
+  schema?: CompletionSchema
   errorLine?: number | null
   placeholder?: string
   handleRef?: React.MutableRefObject<EditorHandle | null>
@@ -113,11 +115,13 @@ export function runnableText(state: EditorState) {
 export function SqlEditor({ docKey, value, onChange, onRun, onSave, schema, errorLine, placeholder, handleRef, ariaLabel, compact }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
-  const langConf = useRef(new Compartment())
   const callbacks = useRef({ onChange, onRun, onSave })
   callbacks.current = { onChange, onRun, onSave }
+  // read at completion time, so a schema that arrives later is used without rebuilding the editor
+  const schemaRef = useRef(schema)
+  schemaRef.current = schema
 
-  const makeState = (doc: string, ns?: SQLNamespace) => {
+  const makeState = (doc: string) => {
     const extensions: Extension[] = [
       lineNumbers(),
       highlightActiveLineGutter(),
@@ -130,7 +134,8 @@ export function SqlEditor({ docKey, value, onChange, onRun, onSave, schema, erro
       highlightActiveLine(),
       highlightSelectionMatches(),
       syntaxHighlighting(highlight),
-      langConf.current.of(sql({ dialect: MySQL, schema: ns, upperCaseKeywords: true })),
+      sql({ dialect: MySQL, upperCaseKeywords: true }), // keywords
+      MySQL.language.data.of({ autocomplete: scopeCompletions(() => schemaRef.current) }), // tables, columns, CTEs, aliases
       errorLineField,
       theme,
       EditorView.lineWrapping,
@@ -170,7 +175,7 @@ export function SqlEditor({ docKey, value, onChange, onRun, onSave, schema, erro
   // create once
   useEffect(() => {
     if (!host.current) return
-    view.current = new EditorView({ state: makeState(value, schema), parent: host.current })
+    view.current = new EditorView({ state: makeState(value), parent: host.current })
     return () => {
       view.current?.destroy()
       view.current = null
@@ -185,7 +190,7 @@ export function SqlEditor({ docKey, value, onChange, onRun, onSave, schema, erro
     if (!v) return
     if (lastKey.current !== docKey) {
       lastKey.current = docKey
-      v.setState(makeState(value, schema))
+      v.setState(makeState(value))
       return
     }
     if (v.state.doc.toString() !== value) {
@@ -194,9 +199,7 @@ export function SqlEditor({ docKey, value, onChange, onRun, onSave, schema, erro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docKey, value])
 
-  useEffect(() => {
-    view.current?.dispatch({ effects: langConf.current.reconfigure(sql({ dialect: MySQL, schema, upperCaseKeywords: true })) })
-  }, [schema])
+
 
   useEffect(() => {
     view.current?.dispatch({ effects: setErrorLine.of(errorLine ?? null) })
